@@ -1,0 +1,18 @@
+snapshot_date,permission,label,extensions,share_pct
+2026-06-23,tabs,"Read your tabs",93319,28.7
+2026-06-23,<all_urls>,"Access all sites",23499,7.2
+2026-06-23,downloads,"Manage downloads",17228,5.3
+2026-06-23,webRequest,"Intercept web requests",16969,5.2
+2026-06-23,cookies,"Read/write cookies",16428,5.1
+2026-06-23,webNavigation,"Track navigation",12085,3.7
+2026-06-23,declarativeNetRequest,"Modify network requests",9632,3.0
+2026-06-23,webRequestBlocking,"Block web requests",6605,2.0
+2026-06-23,bookmarks,"Read/write bookmarks",5308,1.6
+2026-06-23,clipboardRead,"Read clipboard",3903,1.2
+2026-06-23,nativeMessaging,"Talk to native apps",3687,1.1
+2026-06-23,history,"Read browsing history",3031,0.9
+2026-06-23,proxy,"Control proxy settings",2678,0.8
+2026-06-23,management,"Manage other extensions",2369,0.7
+2026-06-23,debugger,"Attach the debugger",2033,0.6
+2026-06-23,geolocation,"Access location",1154,0.4
+2026-06-23,privacy,"Change privacy settings",791,0.2

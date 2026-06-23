@@ -64,11 +64,12 @@ backend with your own API key — there's nothing to host.
 ## 📊 Public research
 
 We continuously scrape and scan the public extension stores, which puts us in a
-good position to publish open data about the ecosystem.
+good position to publish open data about the ecosystem. All datasets are
+aggregate, anonymized, dated, and **CC BY 4.0** — cite away.
 
-→ [**reports/state-of-extensions/**](./reports/state-of-extensions/) — aggregate,
-anonymized stats on store distribution, Manifest V2 → V3 adoption, framework
-usage, and permission trends. Data is CC BY 4.0 — cite away.
+- [**State of Browser Extensions**](./reports/state-of-extensions/) — catalog size and store distribution across Chrome / Firefox / Edge.
+- [**Manifest V3 Migration Tracker**](./reports/manifest-v3-migration/) — how far each store has moved off legacy MV2 (Chrome ~100% MV3; Firefox still majority MV2).
+- [**Permissions & Risk**](./reports/permissions-and-risk/) — which sensitive permissions extensions request, and the automated risk-tier distribution of what we've scanned.
 
 ---
 
