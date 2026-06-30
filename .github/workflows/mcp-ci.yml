@@ -1,0 +1,36 @@
+name: MCP CI
+
+# Build + test the mirrored @extenshi/mcp package. The source is mirrored here
+# from the extenshi.io monorepo; this workflow proves it builds and passes its
+# tests standalone (its only scoped dependency, @extenshi/publisher, resolves
+# from the public npm registry).
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/extenshi-mcp/**'
+      - '.github/workflows/mcp-ci.yml'
+  pull_request:
+    paths:
+      - 'tools/extenshi-mcp/**'
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/extenshi-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test

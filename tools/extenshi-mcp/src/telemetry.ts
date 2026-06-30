@@ -1,0 +1,256 @@
+/**
+ * Anonymous, opt-out usage telemetry — VENDORED, kept byte-identical between
+ * @extenshi/cli and @extenshi/mcp (same pattern as validate-artifact.ts). Edit
+ * one, copy to the other.
+ *
+ * Why it exists: we want to know which commands/tools are used most, which fail,
+ * and what errors recur — without shipping a heavyweight client or leaking PII.
+ *
+ * What it sends (and ONLY this):
+ *   - command/tool name, surface ('cli' | 'mcp'), package + Node version,
+ *     coarse os/arch, a CI bool
+ *   - the NAMES of CLI flags used (never their values — see flagsFromArgv)
+ *   - a coarse error_kind classification + durations
+ *   - a path-redacted exception signature (message + stack, $HOME stripped)
+ *
+ * What it NEVER sends: file paths, artifact names/contents, API keys, manifest
+ * data, or raw user input.
+ *
+ * Identity is an anonymous per-install UUID in ~/.extenshi/config.json
+ * (`anonId`) — it identifies an install, not a person, and is never linked to
+ * the API key client-side.
+ *
+ * On by default: the shared-project ingestion key is embedded (see
+ * EMBEDDED_KEY), so telemetry is active unless the user opts out. Disabled
+ * (no-op, never blocks the command) when ANY holds:
+ *   - DO_NOT_TRACK is truthy (industry standard, https://consoledonottrack.com)
+ *   - EXTENSHI_TELEMETRY in {0,false,off,no}
+ *   - config file has "telemetry": false
+ *   - the key is cleared (EMBEDDED_KEY emptied AND no EXTENSHI_POSTHOG_KEY)
+ *
+ * Everything here is fail-soft: any throw inside telemetry is swallowed so a
+ * PostHog/network/disk problem can never break or slow the actual command.
+ */
+
+import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { PostHog } from 'posthog-node'
+
+// Shared PostHog *project* ingestion key (EU project 114791 — the same project
+// the web apps use; we run on the free tier so CLI/MCP share it). It is the
+// public, write-only key already shipped in our web bundles, so embedding it
+// here is not a secret leak. CLI/MCP events are namespaced (`cli_*` / `mcp_*`,
+// plus a `surface` property) so they stay separable from web analytics.
+// Override at runtime with EXTENSHI_POSTHOG_KEY; set it empty to ship dark.
+const EMBEDDED_KEY = 'phc_fqKrAmtNZvJqe0krpYB3UwYqALLpT1WM8m5LtNs9eUu'
+const DEFAULT_HOST = 'https://eu.i.posthog.com'
+
+const CONFIG_PATH = path.join(os.homedir(), '.extenshi', 'config.json')
+const HOME = os.homedir()
+
+interface TelemetryConfigFile {
+	anonId?: string
+	telemetry?: boolean
+}
+
+let surface = 'unknown'
+let appVersion = '0.0.0'
+let client: PostHog | null = null
+let triedInit = false
+let cachedAnonId: string | null = null
+
+/** Record the surface + version once at process startup. */
+export function initTelemetry(opts: { surface: string; version: string }): void {
+	surface = opts.surface
+	appVersion = opts.version
+}
+
+function telemetryKey(): string {
+	return (process.env.EXTENSHI_POSTHOG_KEY ?? EMBEDDED_KEY).trim()
+}
+
+function telemetryHost(): string {
+	return (process.env.EXTENSHI_POSTHOG_HOST ?? DEFAULT_HOST).trim()
+}
+
+function readConfig(): TelemetryConfigFile {
+	try {
+		return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as TelemetryConfigFile
+	} catch {
+		return {}
+	}
+}
+
+/** Merge-write so we never clobber apiKey/apiUrl written by `extenshi login`. */
+function mergeWriteConfig(update: TelemetryConfigFile): void {
+	try {
+		const existing = readConfig()
+		const merged = { ...existing, ...update }
+		fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true })
+		fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(merged, null, 2)}\n`, { mode: 0o600 })
+	} catch {
+		// Read-only home / unwritable config — fall back to an ephemeral id.
+	}
+}
+
+function isTruthy(v: string | undefined): boolean {
+	const t = (v ?? '').trim().toLowerCase()
+	return t === '1' || t === 'true' || t === 'yes' || t === 'on'
+}
+
+export function telemetryEnabled(): boolean {
+	if (!telemetryKey()) return false
+	if (isTruthy(process.env.DO_NOT_TRACK)) return false
+	const t = (process.env.EXTENSHI_TELEMETRY ?? '').trim().toLowerCase()
+	if (t === '0' || t === 'false' || t === 'off' || t === 'no') return false
+	if (readConfig().telemetry === false) return false
+	return true
+}
+
+function anonId(): string {
+	if (cachedAnonId) return cachedAnonId
+	const existing = readConfig().anonId
+	if (existing) {
+		cachedAnonId = existing
+		return existing
+	}
+	const id = randomUUID()
+	cachedAnonId = id
+	mergeWriteConfig({ anonId: id })
+	return id
+}
+
+function getClient(): PostHog | null {
+	// Fast path after the first call: never re-read the config file
+	// (telemetryEnabled does a sync read) on subsequent events — matters for the
+	// long-running MCP server, which can handle many tool calls.
+	if (client) return client
+	if (triedInit) return null
+	triedInit = true
+	if (!telemetryEnabled()) return null
+	try {
+		// Batch events; the 2–3 events a CLI run emits flush together on
+		// flushTelemetry()/shutdown(). The MCP server (long-running) also gets a
+		// periodic interval flush.
+		client = new PostHog(telemetryKey(), { host: telemetryHost(), flushAt: 20, flushInterval: 5000 })
+	} catch {
+		client = null
+	}
+	return client
+}
+
+function baseProps(): Record<string, unknown> {
+	return {
+		surface,
+		version: appVersion,
+		node: process.version,
+		os: process.platform,
+		arch: process.arch,
+		ci: Boolean(process.env.CI),
+	}
+}
+
+/** Strip absolute home paths from any string before it leaves the machine. */
+export function redactText(s: string): string {
+	if (!s) return s
+	let out = s
+	if (HOME) out = out.split(HOME).join('~')
+	out = out.replace(/\/(?:Users|home)\/[^/\s]+/g, '~')
+	out = out.replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, '~')
+	return out
+}
+
+function sanitizeError(err: unknown): Error {
+	const original = err instanceof Error ? err : new Error(String(err))
+	const e = new Error(redactText(original.message))
+	e.name = original.name
+	if (original.stack) e.stack = redactText(original.stack)
+	return e
+}
+
+/**
+ * Coarse error bucket. Driven by a numeric `status` when the error carries one
+ * (MCP ScanError), else by message patterns (CLI throws plain Errors). Order
+ * matters — status first, then transport, then semantic buckets.
+ */
+export function classifyError(err: unknown): string {
+	const status =
+		typeof (err as { status?: unknown })?.status === 'number' ? (err as { status: number }).status : undefined
+	const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+
+	if (status === 401 || status === 403) return 'auth'
+	if (status === 402) return 'quota'
+	if (status === 429) return 'rate_limit'
+	if (status && status >= 500) return 'api_5xx'
+	if (status && status >= 400) return 'api_4xx'
+
+	if (/enotfound|econnrefused|econnreset|eai_again|fetch failed|network|socket hang|und_err/.test(msg))
+		return 'network'
+	if (/timed out|timeout|aborted|aborterror/.test(msg)) return 'timeout'
+	if (/authentication failed|unauthorized|api key|access denied|forbidden/.test(msg)) return 'auth'
+	if (/insufficient credits|out of .*credits|\bquota\b/.test(msg)) return 'quota'
+	if (/rate limit/.test(msg)) return 'rate_limit'
+	if (/artifact|not a file|file not found|exceeds .*mb|invalid .*(crx|xpi|zip)|magic|unsupported/.test(msg))
+		return 'invalid_artifact'
+	if (/http 4\d{2}/.test(msg)) return 'api_4xx'
+	if (/non-json response|http 5\d{2}|server returned/.test(msg)) return 'api_5xx'
+	return 'unexpected'
+}
+
+/**
+ * The NAMES of long flags the user passed, with values stripped. `--out=/x`
+ * becomes `--out`; the separate-token value of `--output /x` is never a `--`
+ * token, so it is never collected. No flag VALUE can leak through here.
+ */
+export function flagsFromArgv(argv: string[] = process.argv.slice(2)): string[] {
+	const flags = new Set<string>()
+	for (const tok of argv) {
+		if (tok.startsWith('--')) flags.add(tok.split('=')[0])
+	}
+	return [...flags]
+}
+
+export function captureEvent(event: string, properties: Record<string, unknown> = {}): void {
+	const c = getClient()
+	if (!c) return
+	try {
+		c.capture({ distinctId: anonId(), event, properties: { ...baseProps(), ...properties } })
+	} catch {
+		// Telemetry must never throw into the command path.
+	}
+}
+
+export function captureError(err: unknown, context: Record<string, unknown> = {}): void {
+	const c = getClient()
+	if (!c) return
+	try {
+		c.captureException(sanitizeError(err), anonId(), { ...baseProps(), ...context })
+	} catch {
+		// Swallow — see captureEvent.
+	}
+}
+
+function timeout(ms: number): Promise<void> {
+	return new Promise<void>((resolve) => {
+		// unref so the flush timer can't keep a short-lived CLI process alive.
+		setTimeout(resolve, ms).unref()
+	})
+}
+
+/**
+ * Flush buffered events and close the client. Hard-capped so a slow/hung
+ * PostHog endpoint can never delay the command's exit. Safe to call when
+ * telemetry is disabled (no-op) or more than once.
+ */
+export async function flushTelemetry(): Promise<void> {
+	if (!client) return
+	const c = client
+	client = null
+	try {
+		await Promise.race([c.shutdown(2000), timeout(2500)])
+	} catch {
+		// Best-effort.
+	}
+}
