@@ -154,6 +154,37 @@ export function shapeExtension(result: unknown): unknown {
 	})
 }
 
+/** Curate one store review. Reviewer identity is never in the payload (the
+ *  server omits authorName/authorAvatar as PII), so there is nothing to strip
+ *  here — we only bound the free-text body for context-window terseness. */
+function shapeReview(r: unknown): Obj {
+	if (!isObj(r)) return { value: compact(r) }
+	return prune({
+		rating: r.rating,
+		content: typeof r.content === 'string' ? r.content.slice(0, 600) : undefined,
+		date: r.reviewDate,
+		languageId: r.languageId,
+		// Store-native review id (Chrome UUID, Firefox rating id, Edge review id) —
+		// surfaced so an LLM consumer can cite or deep-link a specific review.
+		storeReviewId: r.storeReviewId,
+	})
+}
+
+/**
+ * Curate a page of store user reviews (`get_reviews`). Passes through the
+ * keyset `nextCursor` so the model can page, and a `count` for quick sizing.
+ */
+export function shapeReviews(result: unknown, limit: number): Obj {
+	const arr = Array.isArray(result)
+		? result
+		: isObj(result) && Array.isArray(result.items)
+			? (result.items as unknown[])
+			: []
+	const items = arr.slice(0, limit).map(shapeReview)
+	const nextCursor = isObj(result) ? result.nextCursor : undefined
+	return prune({ count: items.length, nextCursor, items } as Obj)
+}
+
 /**
  * Curate the install-dialog preview — the consolidated permission prompt the
  * browser shows at install (computed server-side by catalog-api from the

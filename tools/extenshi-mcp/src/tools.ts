@@ -1,7 +1,7 @@
 /**
  * Transport-agnostic tool registry for the Extenshi MCP server.
  *
- * The SAME 7 tools must run over two transports:
+ * The SAME 8 tools must run over two transports:
  *   - stdio  (`index.ts`)  — local, single `ek_…` key from the environment.
  *   - remote (`http.ts`, in the sibling `@extenshi/mcp-server`) — Streamable
  *     HTTP behind OAuth; identity is per-request (an access token → userId).
@@ -21,8 +21,8 @@
  *
  *   capability → tools
  *   ─────────────────────────────────────────────────────────────
- *   'read'    → search_extensions, get_extension, get_security,
- *               market_overview
+ *   'read'    → search_extensions, get_extension, get_reviews,
+ *               get_security, market_overview
  *   'docs'    → search_docs                (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
  *   'publish' → publish_extension          (local creds; stdio only)
@@ -43,7 +43,7 @@ import {
 import { checkPublishAccess } from './publish-access.js'
 import { ScanError, scanArtifact } from './scan.js'
 import { describeStoreConstraints, validateSearchFilters } from './search-filters.js'
-import { shapeExtension, shapeSearch, shapeSecurity } from './shape.js'
+import { shapeExtension, shapeReviews, shapeSearch, shapeSecurity } from './shape.js'
 import { captureError, captureEvent, classifyError } from './telemetry.js'
 
 // ── Public links (shared by tool bodies + server instructions) ──────────────
@@ -332,6 +332,54 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					const result = await bff(context).getExtensionById(args.extension_id)
 					if (!result) throw new UserError(`No extension found with catalog ID ${args.extension_id}.`)
 					return JSON.stringify(shapeExtension(result), null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'get_reviews',
+			description:
+				'Get store user reviews for one extension (Chrome, Firefox, Edge): star rating, ' +
+				'review text, date and language. Reviewer identity is intentionally omitted. ' +
+				'Paginated newest-first by default — pass `cursor` (the `nextCursor` from a previous ' +
+				'call) to fetch the next page, or sort by highest rating. Cursors are sort-specific: ' +
+				'keep the same `sort` while paging, and start over if you change it. Reads existing ' +
+				'scraped reviews; use `min_rating` to see only positive or only critical feedback.',
+			parameters: z.object({
+				extension_id: z.number().int().describe('Numeric catalog ID (from search_extensions results).'),
+				limit: z.number().int().min(1).max(50).default(20).describe('Max reviews to return (1–50).'),
+				cursor: z
+					.number()
+					.int()
+					.optional()
+					.describe('Pagination cursor — pass the `nextCursor` returned by a previous call.'),
+				language_id: z.number().int().optional().describe('Only reviews in this catalog language id.'),
+				min_rating: z
+					.number()
+					.int()
+					.min(1)
+					.max(5)
+					.optional()
+					.describe('Only reviews with a star rating ≥ this (1–5).'),
+				sort: z
+					.enum(['recent', 'rating'])
+					.optional()
+					.describe('Order by newest first (default) or highest rating.'),
+			}),
+			execute: async (args, context) => {
+				try {
+					const limit = args.limit
+					const result = await bff(context).getReviews({
+						extensionId: args.extension_id,
+						limit,
+						cursor: args.cursor,
+						languageId: args.language_id,
+						minRating: args.min_rating,
+						sort: args.sort ?? 'recent',
+					})
+					return JSON.stringify(shapeReviews(result, limit), null, 2)
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}

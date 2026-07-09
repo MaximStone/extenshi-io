@@ -21,6 +21,8 @@ type AnyTRPCClient = any
 export interface Bff {
 	searchExtensions(input: Record<string, unknown>): Promise<unknown>
 	getExtensionById(id: number): Promise<unknown>
+	/** Paginated store user reviews for an extension (PII-free projection). */
+	getReviews(input: Record<string, unknown>): Promise<unknown>
 	getSecurityData(extensionId: number): Promise<unknown>
 	getRiskSummary(extensionId: number): Promise<unknown>
 	getSearchFacets(input: Record<string, unknown>): Promise<unknown>
@@ -57,6 +59,7 @@ export function makeBffWithAuth(bffUrl: string, authHeader: () => string | Promi
 	return {
 		searchExtensions: (input) => client.catalog.searchExtensions.query(input),
 		getExtensionById: (id) => client.catalog.getExtensionById.query({ id }),
+		getReviews: (input) => client.catalog.getReviewsForExtension.query(input),
 		getSecurityData: (extensionId) => client.security.getSecurityData.query({ extensionId }),
 		getRiskSummary: (extensionId) => client.security.getRiskSummary.query({ extensionId }),
 		getSearchFacets: (input) => client.catalog.getSearchFacets.query(input),

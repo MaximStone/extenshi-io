@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shapeExtension, shapeInstallDialog, shapeSearch, shapeSecurity } from './shape.js'
+import { shapeExtension, shapeInstallDialog, shapeReviews, shapeSearch, shapeSecurity } from './shape.js'
 
 // Mirrors the `installDialogPreview` shape catalog-api attaches to
 // getExtensionById (see shared-types/permission-warnings.ts → InstallDialogPreview).
@@ -129,5 +129,46 @@ describe('safety-score parity with the website', () => {
 		const out = shapeSecurity({ riskAssessment: { overallScore: 25 } }, null, undefined)
 		const summary = out.summary as Record<string, unknown>
 		expect(summary.safetyScore).toBe(75)
+	})
+})
+
+describe('shapeReviews', () => {
+	it('curates a review page with count + nextCursor and bounds long bodies', () => {
+		const out = shapeReviews(
+			{
+				items: [
+					{
+						rating: 5,
+						content: 'a'.repeat(1000),
+						reviewDate: '2026-01-02T00:00:00.000Z',
+						languageId: 7,
+						storeReviewId: 'chrome-uuid-1',
+					},
+					{ rating: 1, content: null, reviewDate: null, languageId: null, storeReviewId: null },
+				],
+				nextCursor: 99,
+			},
+			10,
+		)
+		expect(out.count).toBe(2)
+		expect(out.nextCursor).toBe(99)
+		const items = out.items as Record<string, unknown>[]
+		expect((items[0].content as string).length).toBe(600)
+		expect(items[0].date).toBe('2026-01-02T00:00:00.000Z')
+		// storeReviewId is surfaced so an LLM can deep-link a specific review.
+		expect(items[0].storeReviewId).toBe('chrome-uuid-1')
+		// Null content / date / languageId / storeReviewId are pruned, not emitted as null.
+		expect(items[1]).toEqual({ rating: 1 })
+	})
+
+	it('never surfaces reviewer identity even if the payload leaks it', () => {
+		// Defense-in-depth: the server omits author fields, but the shaper must
+		// not pass them through either if a drift ever reintroduces them.
+		const out = shapeReviews(
+			{ items: [{ rating: 4, content: 'ok', authorName: 'Jane', authorAvatar: 'x.png' }], nextCursor: null },
+			10,
+		)
+		expect(JSON.stringify(out)).not.toContain('Jane')
+		expect(JSON.stringify(out)).not.toContain('x.png')
 	})
 })

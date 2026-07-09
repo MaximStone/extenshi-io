@@ -38,6 +38,7 @@ enforces it too.
 | --- | --- | --- |
 | `search_extensions` | Hybrid search across Chrome/Firefox/Edge with filters (store, category, pricing, rating, risk, permissions) | 1 read |
 | `get_extension` | Full catalog detail for one extension by numeric catalog ID | 1 read |
+| `get_reviews` | Paginated store user reviews (rating, text, date, language) for an extension — reviewer identity omitted; sort by recent or rating | 1 read |
 | `get_security` | Risk score + finding counts + top grouped findings (reads existing scans) | 1 read |
 | `market_overview` | Catalog-wide market intelligence with no args (totals, store split, category tree, and the extended breakdown — MV2/MV3, sensitive permissions, risk tiers, trader status, recency, reviews); pass a `query` to scope facets to a search | 1 read |
 | `search_docs` | Search the Extenshi docs + `@extenshi/cli` reference so the assistant can quote exact commands | Free (no key) |

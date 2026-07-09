@@ -9,9 +9,17 @@
  * See internal-docs/plans/2026-06-25-claude-connector-directory.md §13 #1.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Bff } from './bff.js'
 import { type Capability, registerTools, type ToolDeps } from './tools.js'
+
+// The `instrument` wrapper fires telemetry on every execute; stub it so the
+// execute-level test below never spins up a real PostHog client.
+vi.mock('./telemetry.js', () => ({
+	captureEvent: vi.fn(),
+	captureError: vi.fn(),
+	classifyError: vi.fn(() => 'unknown'),
+}))
 
 /** Minimal FastMCP stand-in that records the registered tool names. */
 function recordingServer(): { names: string[]; server: Parameters<typeof registerTools>[0] } {
@@ -33,18 +41,18 @@ function depsFor(capabilities: Capability[]): ToolDeps {
 	}
 }
 
-const READ_TOOLS = ['search_extensions', 'get_extension', 'get_security', 'market_overview']
+const READ_TOOLS = ['search_extensions', 'get_extension', 'get_reviews', 'get_security', 'market_overview']
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 7 tools', () => {
+	it('stdio (all capabilities) registers all 8 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, 'search_docs', ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(7)
+		expect(names).toHaveLength(8)
 	})
 
-	it('remote (read + docs only) registers the 5 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 6 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, 'search_docs'].sort())
@@ -72,5 +80,67 @@ describe('registerTools capability gating', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor([]))
 		expect(names).toEqual([])
+	})
+})
+
+describe('get_reviews execute — arg mapping', () => {
+	it('maps snake_case tool args to the BFF camelCase input', async () => {
+		// Capture the full tool objects (not just names) so we can drive execute().
+		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
+		const tools: Record<string, any> = {}
+		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+
+		const calls: Record<string, unknown>[] = []
+		const stubBff = {
+			getReviews: (input: Record<string, unknown>) => {
+				calls.push(input)
+				return Promise.resolve({ items: [], nextCursor: null })
+			},
+		} as unknown as Bff
+
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+
+		// Raw snake_case args as FastMCP would pass post-Zod-parse.
+		await tools.get_reviews.execute(
+			{ extension_id: 77, limit: 10, cursor: 5, language_id: 3, min_rating: 4, sort: 'rating' },
+			{},
+		)
+
+		expect(calls).toHaveLength(1)
+		expect(calls[0]).toEqual({
+			extensionId: 77,
+			limit: 10,
+			cursor: 5,
+			languageId: 3,
+			minRating: 4,
+			sort: 'rating',
+		})
+	})
+
+	it('defaults sort to recent when omitted', async () => {
+		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
+		const tools: Record<string, any> = {}
+		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const calls: Record<string, unknown>[] = []
+		const stubBff = {
+			getReviews: (input: Record<string, unknown>) => {
+				calls.push(input)
+				return Promise.resolve({ items: [], nextCursor: null })
+			},
+		} as unknown as Bff
+
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+
+		await tools.get_reviews.execute({ extension_id: 77, limit: 20 }, {})
+
+		expect(calls[0]).toMatchObject({ extensionId: 77, sort: 'recent' })
 	})
 })
