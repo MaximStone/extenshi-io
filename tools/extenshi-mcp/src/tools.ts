@@ -341,8 +341,8 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 		add({
 			name: 'get_reviews',
 			description:
-				'Get store user reviews for one extension (Chrome, Firefox, Edge): star rating, ' +
-				'review text, date and language. Reviewer identity is intentionally omitted. ' +
+				'Get store user reviews for one extension from Firefox Add-ons and Edge Add-ons: star rating, ' +
+				'review text, date and language. Chrome Web Store reviews are NOT returned (their content cannot be redistributed). Reviewer identity is intentionally omitted. ' +
 				'Paginated newest-first by default — pass `cursor` (the `nextCursor` from a previous ' +
 				'call) to fetch the next page, or sort by highest rating. Cursors are sort-specific: ' +
 				'keep the same `sort` while paging, and start over if you change it. Reads existing ' +
