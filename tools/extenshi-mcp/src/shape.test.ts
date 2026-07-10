@@ -133,7 +133,7 @@ describe('safety-score parity with the website', () => {
 })
 
 describe('shapeReviews', () => {
-	it('curates a review page with count + nextCursor and bounds long bodies', () => {
+	it('curates a FF/Edge review with an excerpt, source note, and store metadata', () => {
 		const out = shapeReviews(
 			{
 				items: [
@@ -142,30 +142,91 @@ describe('shapeReviews', () => {
 						content: 'a'.repeat(1000),
 						reviewDate: '2026-01-02T00:00:00.000Z',
 						languageId: 7,
-						storeReviewId: 'chrome-uuid-1',
+						storeReviewId: 'ff-1',
+						store: 'FIREFOX',
+						storeUrl: 'https://addons.mozilla.org/addon/foo/',
+						contentPolicy: 'excerpt',
+						contentTruncated: true,
 					},
-					{ rating: 1, content: null, reviewDate: null, languageId: null, storeReviewId: null },
 				],
 				nextCursor: 99,
+				aggregate: {
+					rating: 4.5,
+					ratingCount: 1200,
+					ratingUpdatedAt: '2026-02-01T00:00:00.000Z',
+					storeReviewsUrl: 'https://addons.mozilla.org/addon/foo/reviews/',
+				},
 			},
 			10,
 		)
-		expect(out.count).toBe(2)
+		expect(out.count).toBe(1)
 		expect(out.nextCursor).toBe(99)
+		// Store-level aggregate passes through for quick sizing.
+		expect(out.aggregate).toMatchObject({ rating: 4.5, ratingCount: 1200 })
 		const items = out.items as Record<string, unknown>[]
-		expect((items[0].content as string).length).toBe(600)
-		expect(items[0].date).toBe('2026-01-02T00:00:00.000Z')
-		// storeReviewId is surfaced so an LLM can deep-link a specific review.
-		expect(items[0].storeReviewId).toBe('chrome-uuid-1')
-		// Null content / date / languageId / storeReviewId are pruned, not emitted as null.
-		expect(items[1]).toEqual({ rating: 1 })
+		// Double-bound at the excerpt cap even if the server excerpt drifts longer.
+		expect((items[0].content as string).length).toBe(300)
+		expect(items[0].store).toBe('FIREFOX')
+		expect(items[0].contentTruncated).toBe(true)
+		expect(items[0].note).toBe('Source: FIREFOX, full review at https://addons.mozilla.org/addon/foo/')
+		expect(items[0].storeReviewId).toBe('ff-1')
+	})
+
+	it('withholds Chrome review text and points at the store reviews tab', () => {
+		const out = shapeReviews(
+			{
+				items: [
+					{
+						rating: 5,
+						// A drifted payload that still carries a Chrome body — the shaper
+						// must NOT surface it (defense-in-depth).
+						content: 'LEAKED CHROME BODY',
+						reviewDate: '2026-01-02T00:00:00.000Z',
+						storeReviewId: 'chrome-uuid-1',
+						store: 'CHROME',
+						storeUrl: 'https://chromewebstore.google.com/detail/abc',
+						contentPolicy: 'rating-only',
+						contentTruncated: false,
+					},
+				],
+				nextCursor: null,
+			},
+			10,
+		)
+		const items = out.items as Record<string, unknown>[]
+		expect(items[0].content).toBeUndefined()
+		expect(JSON.stringify(out)).not.toContain('LEAKED CHROME BODY')
+		expect(items[0].note).toBe(
+			'Per Chrome Web Store terms, review text is not republished — read the full review at https://chromewebstore.google.com/detail/abc/reviews',
+		)
+		expect(items[0].rating).toBe(5)
+	})
+
+	it('forces rating-only for a Chrome item even if contentPolicy is missing', () => {
+		const out = shapeReviews(
+			{ items: [{ rating: 4, content: 'still secret', store: 'CHROME' }], nextCursor: null },
+			10,
+		)
+		expect(JSON.stringify(out)).not.toContain('still secret')
 	})
 
 	it('never surfaces reviewer identity even if the payload leaks it', () => {
 		// Defense-in-depth: the server omits author fields, but the shaper must
 		// not pass them through either if a drift ever reintroduces them.
 		const out = shapeReviews(
-			{ items: [{ rating: 4, content: 'ok', authorName: 'Jane', authorAvatar: 'x.png' }], nextCursor: null },
+			{
+				items: [
+					{
+						rating: 4,
+						content: 'ok',
+						store: 'EDGE',
+						contentPolicy: 'excerpt',
+						authorName: 'Jane',
+						authorAvatar: 'x.png',
+					},
+				],
+				nextCursor: null,
+			},
 			10,
 		)
 		expect(JSON.stringify(out)).not.toContain('Jane')

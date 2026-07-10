@@ -121,6 +121,41 @@ describe('get_reviews execute — arg mapping', () => {
 		})
 	})
 
+	it('applies the per-store content policy end-to-end (Chrome text withheld)', async () => {
+		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
+		const tools: Record<string, any> = {}
+		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const stubBff = {
+			getReviews: () =>
+				Promise.resolve({
+					items: [
+						{
+							rating: 5,
+							content: 'SECRET CHROME REVIEW BODY',
+							store: 'CHROME',
+							storeUrl: 'https://chromewebstore.google.com/detail/abc',
+							contentPolicy: 'rating-only',
+						},
+					],
+					nextCursor: null,
+					aggregate: { rating: 4.6, ratingCount: 10, storeReviewsUrl: 'x/reviews' },
+				}),
+		} as unknown as Bff
+
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+
+		const rendered: string = await tools.get_reviews.execute({ extension_id: 1, limit: 20 }, {})
+		// The Chrome review body must never reach the model context.
+		expect(rendered).not.toContain('SECRET CHROME REVIEW BODY')
+		// …but the reviews-tab link + aggregate DO surface.
+		expect(rendered).toContain('review text is not republished')
+		expect(rendered).toContain('aggregate')
+	})
+
 	it('defaults sort to recent when omitted', async () => {
 		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
 		const tools: Record<string, any> = {}

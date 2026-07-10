@@ -154,25 +154,64 @@ export function shapeExtension(result: unknown): unknown {
 	})
 }
 
+/** Hard cap on FF/Edge excerpt length surfaced by the MCP — mirrors the
+ *  server's REVIEW_EXCERPT_MAX_CHARS (shared-types/reviews.ts). The server
+ *  already excerpts; this is a defense-in-depth double-bound so a drifted
+ *  payload can never surface a longer body through the MCP. */
+const REVIEW_EXCERPT_MAX_CHARS = 300
+
 /** Curate one store review. Reviewer identity is never in the payload (the
  *  server omits authorName/authorAvatar as PII), so there is nothing to strip
- *  here — we only bound the free-text body for context-window terseness. */
+ *  here. The paid MCP surface obeys the same per-store content policy as the
+ *  website (shared-types/reviews.ts):
+ *    - CHROME (`contentPolicy: 'rating-only'`) → NO review text; surface the
+ *      bare facts + a note pointing at the store's reviews tab.
+ *    - FIREFOX/EDGE (`'excerpt'`) → the ≤300-char excerpt + a source attribution.
+ *  Chrome is forced rating-only even if a drifted payload carried a body. */
 function shapeReview(r: unknown): Obj {
 	if (!isObj(r)) return { value: compact(r) }
-	return prune({
+	const store = typeof r.store === 'string' ? r.store : undefined
+	const storeUrl = typeof r.storeUrl === 'string' ? r.storeUrl : undefined
+	const base: Obj = {
 		rating: r.rating,
-		content: typeof r.content === 'string' ? r.content.slice(0, 600) : undefined,
 		date: r.reviewDate,
 		languageId: r.languageId,
 		// Store-native review id (Chrome UUID, Firefox rating id, Edge review id) —
 		// surfaced so an LLM consumer can cite or deep-link a specific review.
 		storeReviewId: r.storeReviewId,
-	})
+		store,
+		storeUrl,
+	}
+
+	// Chrome: never republish the text. Point the model at the store reviews tab.
+	if (r.contentPolicy === 'rating-only' || store === 'CHROME') {
+		// `storeUrl` here is the LISTING url (`/detail/<id>`), so appending
+		// `/reviews` yields the reviews tab — matching the server's
+		// getStoreReviewsUrl('CHROME', …). It does NOT double-append.
+		const reviewsUrl = storeUrl ? `${storeUrl}/reviews` : undefined
+		return prune({
+			...base,
+			note: reviewsUrl
+				? `Per Chrome Web Store terms, review text is not republished — read the full review at ${reviewsUrl}`
+				: 'Per Chrome Web Store terms, review text is not republished.',
+		} as Obj)
+	}
+
+	// Firefox / Edge: bounded excerpt + source attribution.
+	const content = typeof r.content === 'string' ? r.content.slice(0, REVIEW_EXCERPT_MAX_CHARS) : undefined
+	return prune({
+		...base,
+		content,
+		contentTruncated: r.contentTruncated === true ? true : undefined,
+		note: storeUrl && store ? `Source: ${store}, full review at ${storeUrl}` : undefined,
+	} as Obj)
 }
 
 /**
  * Curate a page of store user reviews (`get_reviews`). Passes through the
- * keyset `nextCursor` so the model can page, and a `count` for quick sizing.
+ * keyset `nextCursor` so the model can page, a `count` for quick sizing, and the
+ * store-level `aggregate` (rating / count / snapshot date + reviews link) — the
+ * bare facts that stay public even for Chrome.
  */
 export function shapeReviews(result: unknown, limit: number): Obj {
 	const arr = Array.isArray(result)
@@ -182,7 +221,8 @@ export function shapeReviews(result: unknown, limit: number): Obj {
 			: []
 	const items = arr.slice(0, limit).map(shapeReview)
 	const nextCursor = isObj(result) ? result.nextCursor : undefined
-	return prune({ count: items.length, nextCursor, items } as Obj)
+	const aggregate = isObj(result) && isObj(result.aggregate) ? compact(result.aggregate) : undefined
+	return prune({ count: items.length, nextCursor, aggregate, items } as Obj)
 }
 
 /**
