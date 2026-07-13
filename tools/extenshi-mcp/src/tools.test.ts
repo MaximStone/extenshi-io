@@ -21,12 +21,34 @@ vi.mock('./telemetry.js', () => ({
 	classifyError: vi.fn(() => 'unknown'),
 }))
 
-/** Minimal FastMCP stand-in that records the registered tool names. */
-function recordingServer(): { names: string[]; server: Parameters<typeof registerTools>[0] } {
+interface RecordedTool {
+	name: string
+	annotations?: {
+		title?: string
+		readOnlyHint?: boolean
+		destructiveHint?: boolean
+		idempotentHint?: boolean
+		openWorldHint?: boolean
+	}
+}
+
+/** Minimal FastMCP stand-in that records the registered tools (name + annotations). */
+function recordingServer(): {
+	names: string[]
+	tools: RecordedTool[]
+	server: Parameters<typeof registerTools>[0]
+} {
+	const tools: RecordedTool[] = []
 	const names: string[] = []
-	// Only `addTool` is exercised at registration time.
-	const server = { addTool: (t: { name: string }) => names.push(t.name) }
-	return { names, server: server as unknown as Parameters<typeof registerTools>[0] }
+	// Only `addTool` is exercised at registration time. `names` and `tools` are
+	// stable array references mutated in place, so callers can destructure either.
+	const server = {
+		addTool: (t: RecordedTool) => {
+			tools.push(t)
+			names.push(t.name)
+		},
+	}
+	return { names, tools, server: server as unknown as Parameters<typeof registerTools>[0] }
 }
 
 const noopBff = {} as Bff
@@ -177,5 +199,40 @@ describe('get_reviews execute — arg mapping', () => {
 		await tools.get_reviews.execute({ extension_id: 77, limit: 20 }, {})
 
 		expect(calls[0]).toMatchObject({ extensionId: 77, sort: 'recent' })
+	})
+})
+
+// The Anthropic Connectors Directory submission portal auto-syncs the server's
+// tools and refuses to submit any tool missing a `title` or a read/write hint.
+// This contract guards that every tool ships those annotations, and that the
+// read/write split is declared correctly.
+describe('directory tool annotations', () => {
+	it('every registered tool declares a title and a readOnlyHint', () => {
+		const { tools, server } = recordingServer()
+		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
+		expect(tools).toHaveLength(8)
+		for (const t of tools) {
+			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
+			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')
+		}
+	})
+
+	it('all remote-exposed (read + docs) tools are read-only', () => {
+		const { tools, server } = recordingServer()
+		registerTools(server, depsFor(['read', 'docs']))
+		for (const t of tools) {
+			expect(t.annotations?.readOnlyHint, `${t.name} should be read-only`).toBe(true)
+		}
+	})
+
+	it('publish is destructive and scan is a non-read-only write', () => {
+		const { tools, server } = recordingServer()
+		registerTools(server, depsFor(['scan', 'publish']))
+		const publish = tools.find((t) => t.name === 'publish_extension')
+		const scan = tools.find((t) => t.name === 'scan_extension')
+		expect(publish?.annotations?.readOnlyHint).toBe(false)
+		expect(publish?.annotations?.destructiveHint).toBe(true)
+		expect(scan?.annotations?.readOnlyHint).toBe(false)
+		expect(scan?.annotations?.destructiveHint).toBe(false)
 	})
 })

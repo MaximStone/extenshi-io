@@ -192,6 +192,74 @@ function instrument<Params extends ToolParameters>(
 // ── Registration ─────────────────────────────────────────────────────────────
 
 /**
+ * MCP tool annotations (spec: title + behaviour hints). REQUIRED for the
+ * Anthropic Connectors Directory — its submission portal auto-syncs tools and
+ * refuses to submit any tool missing a `title` or a read/write hint. Kept as a
+ * name→annotation map (not inline per tool) so the read/write split is auditable
+ * in one place. Every remote-exposed tool is read-only; scan uploads an artifact
+ * (not read-only, not destructive); publish writes to public stores (destructive).
+ */
+const TOOL_ANNOTATIONS: Record<
+	string,
+	{
+		title: string
+		readOnlyHint?: boolean
+		destructiveHint?: boolean
+		idempotentHint?: boolean
+		openWorldHint?: boolean
+	}
+> = {
+	search_extensions: {
+		title: 'Search extension catalog',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	get_extension: {
+		title: 'Get extension details',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	get_reviews: {
+		title: 'Get extension reviews',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	get_security: {
+		title: 'Get extension security analysis',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	market_overview: {
+		title: 'Catalog market overview',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	search_docs: {
+		title: 'Search Extenshi documentation',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	scan_extension: {
+		title: 'Scan an extension package',
+		readOnlyHint: false,
+		destructiveHint: false,
+		openWorldHint: true,
+	},
+	publish_extension: {
+		title: 'Publish extension to stores',
+		readOnlyHint: false,
+		destructiveHint: true,
+		openWorldHint: true,
+	},
+}
+
+/**
  * Register the Extenshi tools on a FastMCP server. Idempotent per server.
  * Only the tools whose capability is present in `deps.capabilities` are added.
  */
@@ -201,7 +269,10 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 	// Generic so each tool's Zod `parameters` infers its own `args` type (a
 	// non-generic wrapper would collapse Params to `never`).
 	function add<P extends ToolParameters>(tool: Tool<FastMCPSessionAuth, P>): void {
-		server.addTool(instrument(tool))
+		// Attach the directory-required annotations (title + read/write hint) from
+		// the central map; an explicit `tool.annotations` (none today) still wins.
+		const annotations = { ...TOOL_ANNOTATIONS[tool.name], ...tool.annotations }
+		server.addTool(instrument({ ...tool, annotations }))
 	}
 	// Per-call helpers bound to the injected deps.
 	const bff = (ctx: ToolCallContext): Bff => deps.getBff(ctx)
