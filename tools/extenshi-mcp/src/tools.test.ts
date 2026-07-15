@@ -9,16 +9,21 @@
  * See internal-docs/plans/2026-06-25-claude-connector-directory.md §13 #1.
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { UserError } from 'fastmcp'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bff } from './bff.js'
-import { type Capability, registerTools, type ToolDeps } from './tools.js'
+import { captureError, captureEvent } from './telemetry.js'
+import { type Capability, isExpectedError, registerTools, type ToolDeps } from './tools.js'
 
-// The `instrument` wrapper fires telemetry on every execute; stub it so the
-// execute-level test below never spins up a real PostHog client.
-vi.mock('./telemetry.js', () => ({
+// The `instrument` wrapper fires telemetry on every execute; stub the capture
+// sinks so the execute-level tests below never spin up a real PostHog client.
+// `classifyError` is deliberately NOT stubbed: it decides which failures count
+// as expected, so stubbing it would leave these tests asserting against a mock
+// instead of the real expected-vs-fault boundary.
+vi.mock('./telemetry.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('./telemetry.js')>()),
 	captureEvent: vi.fn(),
 	captureError: vi.fn(),
-	classifyError: vi.fn(() => 'unknown'),
 }))
 
 interface RecordedTool {
@@ -234,5 +239,136 @@ describe('directory tool annotations', () => {
 		expect(publish?.annotations?.destructiveHint).toBe(true)
 		expect(scan?.annotations?.readOnlyHint).toBe(false)
 		expect(scan?.annotations?.destructiveHint).toBe(false)
+	})
+})
+
+// The billing quota gate (and other expected, user-facing conditions) must NOT
+// be shipped to error tracking as exceptions — otherwise a routine "free read
+// allowance exhausted" message mints a bogus, self-reopening issue. The failure
+// count still has to be tracked, so `mcp_tool_failed` must fire regardless.
+//
+// These run end-to-end through the real readError() + classifyError(): the whole
+// question is what survives that wrapping, which a stub can't answer.
+describe('instrument — expected errors skip exception capture', () => {
+	// Cleared BEFORE each test, not after: the describe blocks above drive
+	// execute() through the same instrumented spies, so these `not.toHaveBeenCalled`
+	// assertions would otherwise depend on what ran earlier in the file.
+	beforeEach(() => vi.clearAllMocks())
+
+	/**
+	 * A `get_reviews` tool whose BFF call rejects with `err`. Any read tool would
+	 * do — they all funnel through the same readError() — but get_reviews is a
+	 * metered read, so it is the one that actually hits the free-allowance gate
+	 * being reproduced here.
+	 */
+	function getReviewsToolRejectingWith(err: unknown): {
+		execute: (a: unknown, c: unknown) => Promise<unknown>
+	} {
+		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
+		const tools: Record<string, any> = {}
+		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const stubBff = {
+			getReviews: () => Promise.reject(err),
+		} as unknown as Bff
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+		return tools.get_reviews
+	}
+
+	/** How the catalog BFF's free-read gate reaches the client: TRPCClientError, HTTP 429. */
+	const quotaGate = () =>
+		Object.assign(
+			new Error(
+				'Free read allowance exhausted (25/mo). Buy a read pack at https://dojo.extenshi.io/billing — the free allowance resets on the 1st (UTC).',
+			),
+			{ data: { code: 'TOO_MANY_REQUESTS', httpStatus: 429 } },
+		)
+
+	it('a quota gate fires mcp_tool_failed but is NOT captured as an exception', async () => {
+		// The exact reported scenario: a metered read hits the free-allowance gate.
+		const tool = getReviewsToolRejectingWith(quotaGate())
+		await expect(tool.execute({ extension_id: 1, limit: 20 }, {})).rejects.toBeInstanceOf(UserError)
+
+		expect(captureError).not.toHaveBeenCalled()
+		expect(captureEvent).toHaveBeenCalledWith(
+			'mcp_tool_failed',
+			expect.objectContaining({ tool: 'get_reviews', error_kind: 'quota' }),
+		)
+	})
+
+	// The regression the `cause` plumbing exists to prevent: readError() wraps a
+	// genuine fault in a UserError too, so without the origin these would read as
+	// "expected" and silently stop reaching error tracking.
+	it('a BFF 5xx behind the same UserError IS captured as an exception', async () => {
+		const tool = getReviewsToolRejectingWith(
+			Object.assign(new Error('Internal server error'), {
+				data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+			}),
+		)
+		await expect(tool.execute({ extension_id: 1, limit: 20 }, {})).rejects.toBeInstanceOf(UserError)
+
+		expect(captureError).toHaveBeenCalledWith(expect.any(Error), { tool: 'get_reviews' })
+		expect(captureEvent).toHaveBeenCalledWith(
+			'mcp_tool_failed',
+			expect.objectContaining({ tool: 'get_reviews', error_kind: 'api_5xx' }),
+		)
+	})
+
+	it('an unexpected fault inside a read handler IS captured as an exception', async () => {
+		const tool = getReviewsToolRejectingWith(new TypeError('x.map is not a function'))
+		await expect(tool.execute({ extension_id: 1, limit: 20 }, {})).rejects.toBeInstanceOf(UserError)
+
+		expect(captureError).toHaveBeenCalledWith(expect.any(Error), { tool: 'get_reviews' })
+	})
+})
+
+// The policy that decides which failures are "expected" (user-facing) vs a real
+// fault worth an exception report.
+describe('isExpectedError', () => {
+	/** A UserError wrapping an origin, as readError()/the docs+scan handlers build it. */
+	function wrapping(cause: unknown): UserError {
+		const err = new UserError('rendered for the caller')
+		err.cause = cause
+		return err
+	}
+
+	it('treats an AUTHORED UserError (no cause) as expected', () => {
+		// e.g. "No extension found with catalog ID 5" or the missing-key help —
+		// messages this codebase wrote deliberately, not wrapped faults.
+		expect(isExpectedError(new UserError('No extension found with catalog ID 5.'))).toBe(true)
+	})
+
+	it('treats quota / rate_limit / auth classes as expected', () => {
+		expect(isExpectedError({ status: 402 }), 'quota').toBe(true)
+		expect(isExpectedError({ status: 429 }), 'rate_limit').toBe(true)
+		expect(isExpectedError({ status: 401 }), 'auth').toBe(true)
+	})
+
+	it('treats genuine faults as NOT expected', () => {
+		expect(isExpectedError({ status: 500 }), 'api_5xx').toBe(false)
+		expect(isExpectedError(new Error('fetch failed')), 'network').toBe(false)
+		expect(isExpectedError(new Error('timed out')), 'timeout').toBe(false)
+		expect(isExpectedError(new Error('something weird')), 'unexpected').toBe(false)
+	})
+
+	// The core of the wrapper/authored split: a UserError is only as expected as
+	// whatever it wraps.
+	it('a UserError WRAPPING an expected condition stays expected', () => {
+		expect(isExpectedError(wrapping({ status: 429 }))).toBe(true)
+	})
+
+	it('honours a caller-supplied kind, so instrument() cannot report one kind and gate on another', () => {
+		// instrument() classifies once and passes the result in; the default
+		// argument must not re-classify behind its back.
+		expect(isExpectedError({ status: 500 }, 'quota')).toBe(true)
+		expect(isExpectedError({ status: 402 }, 'api_5xx')).toBe(false)
+	})
+
+	it('a UserError WRAPPING a genuine fault is NOT expected', () => {
+		expect(isExpectedError(wrapping({ status: 500 })), 'api_5xx').toBe(false)
+		expect(isExpectedError(wrapping(new TypeError('x.map is not a function'))), 'bug').toBe(false)
 	})
 })

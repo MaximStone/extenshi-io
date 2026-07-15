@@ -123,15 +123,50 @@ export interface ToolDeps {
 
 // ── Internal helpers (ported from index.ts, now deps-parametrized) ───────────
 
-/** Normalize a thrown read error into a user-facing message. */
+/**
+ * A `UserError` that keeps the error it renders as `cause`.
+ *
+ * ANY catch-all that turns a caught error into a `UserError` MUST build it here
+ * rather than with `new UserError(err.message)`. isExpectedError() reads a
+ * missing `cause` as "a message we authored" — i.e. expected — so a hand-rolled
+ * wrapper silently drops whatever it caught (a BFF 5xx, a TypeError) from error
+ * tracking. That's the bug this helper exists to prevent; the convention is not
+ * enforced by the type system, so it lives here and in isExpectedError().
+ *
+ * Two fastmcp details force this to be a helper rather than
+ * `new UserError(msg, { cause })`:
+ *  1. `UserError`'s constructor is `(message, extras?)` and passes ONLY the
+ *     message to `super()` — an `ErrorOptions` second argument is silently
+ *     dropped, so `.cause` would stay undefined.
+ *  2. `extras` is not a place to stash the origin either: fastmcp spreads it
+ *     into the tool result as `structuredContent`, which would ship the raw
+ *     error (stack, internal URLs) to the caller.
+ * So set `cause` on the instance. fastmcp never reads it, so nothing leaks — but
+ * classifyError()/isExpectedError() can see the origin behind the rendered
+ * message instead of guessing from its wording.
+ */
+function userErrorFrom(message: string, cause: unknown): UserError {
+	const err = new UserError(message)
+	err.cause = cause
+	return err
+}
+
+/**
+ * Normalize a thrown read error into a user-facing message.
+ *
+ * NB: this wraps EVERY failure — a BFF 5xx and a plain bug included — so the
+ * resulting `UserError` says nothing about whether the failure was expected.
+ * That's why the origin is preserved as `cause`: it's the only thing left that
+ * can tell a quota gate from a genuine fault. See isExpectedError().
+ */
 function readError(err: unknown, missingKeyMessage: string): never {
 	if (err instanceof UserError) throw err
 	const message = err instanceof Error ? err.message : String(err)
 	// A 401 means the BFF rejected the key (enforcement landed / key invalid).
 	if (/unauthorized|401|api key/i.test(message)) {
-		throw new UserError(`Request rejected — ${message}\n\n${missingKeyMessage}`)
+		throw userErrorFrom(`Request rejected — ${message}\n\n${missingKeyMessage}`, err)
 	}
-	throw new UserError(message)
+	throw userErrorFrom(message, err)
 }
 
 /** Map a scan backend failure to an actionable next step. */
@@ -156,6 +191,43 @@ function scanErrorMessage(err: ScanError, missingKeyMessage: string): string {
 }
 
 /**
+ * Error classes that are EXPECTED, user-facing conditions rather than faults:
+ * the caller ran out of their free allowance (`quota`), got rate limited
+ * (`rate_limit`), or supplied a bad/absent key (`auth`). These surface to the
+ * user as an actionable message — they are not code exceptions, so they must
+ * NOT be shipped to error tracking (otherwise a routine billing gate mints a
+ * bogus, self-reopening issue). See classifyError() in ./telemetry.ts.
+ */
+const EXPECTED_ERROR_KINDS = new Set(['quota', 'rate_limit', 'auth'])
+
+/**
+ * True when a thrown error is an expected, user-facing condition rather than a
+ * bug worth an exception report.
+ *
+ * `UserError` alone can't answer this. It has two jobs in this file: messages we
+ * AUTHORED for the caller ("No extension found …", the missing-key help), and a
+ * last-resort wrapper the catch-alls put around anything that escaped (readError,
+ * the docs/scan handlers). Treating every `UserError` as expected would let that
+ * second group launder a BFF 500 or a plain TypeError into "expected" and drop it
+ * from error tracking — so the two are told apart by `cause`:
+ *
+ *   - authored (no `cause`)  → expected by construction: we wrote the message.
+ *   - wrapping (has `cause`) → only as expected as what it wraps; classifyError
+ *     follows the chain, so a 429 gate stays expected and a 500 does not.
+ *
+ * Corollary for anything that wraps a caught error: build it with
+ * userErrorFrom(), or it reads as authored and its origin never gets captured.
+ *
+ * `kind` defaults to classifying `err`; pass one to reuse a classification the
+ * caller already made, so the reported `error_kind` and this decision can't
+ * disagree.
+ */
+export function isExpectedError(err: unknown, kind: string = classifyError(err)): boolean {
+	if (EXPECTED_ERROR_KINDS.has(kind)) return true
+	return err instanceof UserError && err.cause === undefined
+}
+
+/**
  * Wrap a tool definition so every call emits anonymous telemetry: which tool
  * ran, how long it took, and how it failed (coarse error_kind + sanitized
  * exception). The generic preserves the Zod-inferred `args` type — `parameters`
@@ -177,12 +249,17 @@ function instrument<Params extends ToolParameters>(
 				captureEvent('mcp_tool_succeeded', { tool: name, duration_ms: Date.now() - startedAt })
 				return result
 			} catch (err) {
-				captureEvent('mcp_tool_failed', {
-					tool: name,
-					error_kind: classifyError(err),
-					duration_ms: Date.now() - startedAt,
-				})
-				captureError(err, { tool: name })
+				// Classified once and threaded into both uses below: the reported
+				// error_kind and the capture decision must never disagree about what
+				// this failure was.
+				const kind = classifyError(err)
+				// The failure count is always tracked, so we keep visibility into
+				// how often callers hit each condition (incl. the billing gate).
+				captureEvent('mcp_tool_failed', { tool: name, error_kind: kind, duration_ms: Date.now() - startedAt })
+				// …but only genuine faults are shipped as exceptions. Expected
+				// user-facing conditions (a quota gate, a bad key, a message we
+				// authored) are not bugs and must not open error-tracking issues.
+				if (!isExpectedError(err, kind)) captureError(err, { tool: name })
 				throw err
 			}
 		},
@@ -599,8 +676,10 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					if (!query) return await getDocsIndex(deps.cfg.docsUrl)
 					return await searchDocs(deps.cfg.docsUrl, query, args.limit ?? 4)
 				} catch (err) {
-					if (err instanceof DocsError) throw new UserError(err.message)
-					throw new UserError(err instanceof Error ? err.message : String(err))
+					// Both branches keep the origin as `cause` — a docs outage is a
+					// fault worth capturing, not an expected condition.
+					if (err instanceof DocsError) throw userErrorFrom(err.message, err)
+					throw userErrorFrom(err instanceof Error ? err.message : String(err), err)
 				}
 			},
 		})
@@ -640,7 +719,10 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					})
 					return JSON.stringify(shapeExtension(report), null, 2)
 				} catch (err) {
-					if (err instanceof ScanError) throw new UserError(scanErrorMessage(err, missingKeyMessage))
+					// Keep the ScanError as `cause`: scanErrorMessage() renders 402/429
+					// and a 500 alike, so only the origin's status still says which of
+					// those is a fault worth capturing.
+					if (err instanceof ScanError) throw userErrorFrom(scanErrorMessage(err, missingKeyMessage), err)
 					throw err
 				}
 			},

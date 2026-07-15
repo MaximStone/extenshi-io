@@ -171,13 +171,22 @@ function sanitizeError(err: unknown): Error {
 }
 
 /**
- * Coarse error bucket. Driven by a numeric `status` when the error carries one
- * (MCP ScanError), else by message patterns (CLI throws plain Errors). Order
- * matters — status first, then transport, then semantic buckets.
+ * The HTTP status an error carries, whichever shape it arrived in:
+ *   - `status`          — MCP ScanError, thrown by ./scan.ts.
+ *   - `data.httpStatus` — @trpc/client's TRPCClientError, i.e. every catalog BFF
+ *     read. tRPC puts the status inside `data` and has NO top-level `status`, so
+ *     reading only `status` left the entire read path to message heuristics.
  */
-export function classifyError(err: unknown): string {
-	const status =
-		typeof (err as { status?: unknown })?.status === 'number' ? (err as { status: number }).status : undefined
+function statusOf(err: unknown): number | undefined {
+	const e = err as { status?: unknown; data?: { httpStatus?: unknown } } | null | undefined
+	if (typeof e?.status === 'number') return e.status
+	if (typeof e?.data?.httpStatus === 'number') return e.data.httpStatus
+	return undefined
+}
+
+/** Classify a single error, ignoring any `cause` chain. See classifyError(). */
+function classifyOne(err: unknown): string {
+	const status = statusOf(err)
 	const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
 
 	if (status === 401 || status === 403) return 'auth'
@@ -190,12 +199,45 @@ export function classifyError(err: unknown): string {
 		return 'network'
 	if (/timed out|timeout|aborted|aborterror/.test(msg)) return 'timeout'
 	if (/authentication failed|unauthorized|api key|access denied|forbidden/.test(msg)) return 'auth'
-	if (/insufficient credits|out of .*credits|\bquota\b/.test(msg)) return 'quota'
+	// `allowance exhausted` is the catalog BFF's free-read gate (routers/_app.ts:
+	// "Free read allowance exhausted (25/mo)"), which matches none of the credit
+	// wordings above.
+	if (/insufficient credits|out of .*credits|\bquota\b|allowance exhausted/.test(msg)) return 'quota'
 	if (/rate limit/.test(msg)) return 'rate_limit'
 	if (/artifact|not a file|file not found|exceeds .*mb|invalid .*(crx|xpi|zip)|magic|unsupported/.test(msg))
 		return 'invalid_artifact'
 	if (/http 4\d{2}/.test(msg)) return 'api_4xx'
 	if (/non-json response|http 5\d{2}|server returned/.test(msg)) return 'api_5xx'
+	return 'unexpected'
+}
+
+/** How deep to follow `cause` before giving up (guards a cyclic chain). */
+const MAX_CAUSE_DEPTH = 4
+
+/**
+ * Coarse error bucket. Driven by a numeric status when the error carries one
+ * (ScanError `status`, tRPC `data.httpStatus`), else by message patterns (the
+ * CLI throws plain Errors). Order matters — status first, then transport, then
+ * semantic buckets.
+ *
+ * Follows the `cause` chain: the tool layer re-throws failures wrapped in a
+ * `UserError` so fastmcp renders them for the caller (see readError() in
+ * ./tools.ts), and that wrapper's own message can carry no status. The origin
+ * hangs off `cause`, so an unclassifiable wrapper defers to what it wraps —
+ * without it, a BFF 500 behind a UserError reads as `unexpected`.
+ */
+export function classifyError(err: unknown): string {
+	let cur: unknown = err
+	for (let depth = 0; cur != null && depth < MAX_CAUSE_DEPTH; depth++) {
+		const kind = classifyOne(cur)
+		if (kind !== 'unexpected') return kind
+		const next: unknown = (cur as { cause?: unknown }).cause
+		// An error that causes itself has no origin left to consult, which is a
+		// different thing from running out of depth budget. MAX_CAUSE_DEPTH would
+		// bound this anyway — stopping here just says so at the point it's true.
+		if (next === cur) break
+		cur = next
+	}
 	return 'unexpected'
 }
 

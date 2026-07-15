@@ -56,6 +56,56 @@ describe('classifyError (MCP ScanError carries a numeric status)', () => {
 	})
 })
 
+// Every catalog BFF read arrives as a TRPCClientError, which carries its status
+// at `data.httpStatus` and has NO top-level `status`. Reading only `status` left
+// the whole read path to message heuristics.
+describe('classifyError (tRPC client errors carry data.httpStatus)', () => {
+	/** The shape @trpc/client exposes on TRPCClientError (default errorFormatter). */
+	function trpcError(message: string, httpStatus: number): Error {
+		return Object.assign(new Error(message), { data: { code: 'X', httpStatus } })
+	}
+
+	it('maps data.httpStatus', () => {
+		expect(classifyError(trpcError('nope', 401))).toBe('auth')
+		expect(classifyError(trpcError('nope', 429))).toBe('rate_limit')
+		expect(classifyError(trpcError('boom', 500))).toBe('api_5xx')
+	})
+
+	it('classifies the free-read gate as quota, not unexpected', () => {
+		// Verbatim from catalog-bff routers/_app.ts — it matches none of the
+		// credit/quota wordings, which is why `allowance exhausted` is a pattern.
+		const gate = 'Free read allowance exhausted (25/mo). Buy a read pack at https://dojo.extenshi.io/billing'
+		expect(classifyError(new Error(gate))).toBe('quota')
+	})
+})
+
+// readError()/the docs+scan handlers re-throw failures wrapped in a UserError so
+// fastmcp can render them; the wrapper's own message carries no status, so the
+// classifier has to look through to the origin.
+describe('classifyError (follows the cause chain)', () => {
+	it('classifies the cause when the wrapper itself is unclassifiable', () => {
+		const wrapper = Object.assign(new Error('rendered for the user'), {
+			cause: Object.assign(new Error('boom'), { data: { httpStatus: 500 } }),
+		})
+		expect(classifyError(wrapper)).toBe('api_5xx')
+	})
+
+	it('prefers the wrapper when it classifies on its own', () => {
+		const wrapper = Object.assign(new Error('fetch failed'), { cause: { status: 500 } })
+		expect(classifyError(wrapper)).toBe('network')
+	})
+
+	it('does not hang on a self-referential or cyclic cause', () => {
+		const a = new Error('a') as Error & { cause?: unknown }
+		const b = new Error('b') as Error & { cause?: unknown }
+		a.cause = a
+		expect(classifyError(a)).toBe('unexpected')
+		b.cause = a
+		a.cause = b
+		expect(classifyError(b)).toBe('unexpected')
+	})
+})
+
 describe('flagsFromArgv', () => {
 	it('never leaks flag values', () => {
 		expect(flagsFromArgv(['--api-url', 'https://secret/y', '--json'])).toEqual(['--api-url', '--json'])
