@@ -23,7 +23,7 @@
  *   ─────────────────────────────────────────────────────────────
  *   'read'    → search_extensions, get_extension, get_reviews,
  *               get_security, market_overview
- *   'docs'    → search_docs                (free; no key)
+ *   'docs'    → search_docs, generate_icon_workflow  (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
  *   'publish' → publish_extension          (local creds; stdio only)
  *
@@ -34,6 +34,7 @@ import { type FastMCP, type FastMCPSessionAuth, type Tool, type ToolParameters, 
 import { z } from 'zod'
 import type { Bff } from './bff.js'
 import { DocsError, getDocsIndex, searchDocs } from './docs.js'
+import { renderIconWorkflow } from './icon-workflow.js'
 import {
 	PublishSetupError,
 	publishArtifact,
@@ -72,7 +73,9 @@ export const SERVER_INSTRUCTIONS =
 	'inspect an extension and its security findings, find competitors, read market stats, ' +
 	'run a pre-publish security scan, and publish to the stores. Use search_docs (free, no ' +
 	'key) to consult the live product documentation and the @extenshi/cli command reference — ' +
-	'prefer quoting exact CLI commands and flags from the docs over guessing. The catalog and ' +
+	'prefer quoting exact CLI commands and flags from the docs over guessing. Use ' +
+	'generate_icon_workflow (free, no key) when the developer needs an extension icon — it ' +
+	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. The catalog and ' +
 	`scan tools require an Extenshi API key (${KEY_PAGE}). Every account gets a free monthly ` +
 	'allowance — 25 reads and 5 scans per month; beyond it, buy prepaid credit packs (scans ' +
 	`and reads, never expire) at ${BILLING_PAGE}.`
@@ -321,6 +324,12 @@ const TOOL_ANNOTATIONS: Record<
 		readOnlyHint: true,
 		idempotentHint: true,
 		openWorldHint: true,
+	},
+	generate_icon_workflow: {
+		title: 'Icon design workflow guide',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: false,
 	},
 	scan_extension: {
 		title: 'Scan an extension package',
@@ -682,6 +691,25 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					throw userErrorFrom(err instanceof Error ? err.message : String(err), err)
 				}
 			},
+		})
+
+		add({
+			name: 'generate_icon_workflow',
+			description:
+				'Get the recommended FREE local workflow for creating a browser-extension icon: the ' +
+				'agent draws the SVG itself, then `@extenshi/cli icon preview` renders an offline ' +
+				'verification page (Chrome/Firefox/Edge toolbar mockups, palette switcher with contrast ' +
+				'warnings, store-size matrix, PNG/ZIP export). Returns the icon design requirements ' +
+				'(sizes, 16px legibility rules, light/dark survival) and exact commands. Static content: ' +
+				'no API key, no network, no credits.',
+			parameters: z.object({
+				extension_name: z
+					.string()
+					.max(120)
+					.optional()
+					.describe('Extension display name to inline into the preview command (optional).'),
+			}),
+			execute: async (args) => renderIconWorkflow({ extensionName: args.extension_name }),
 		})
 	}
 

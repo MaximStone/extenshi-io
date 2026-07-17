@@ -69,37 +69,39 @@ function depsFor(capabilities: Capability[]): ToolDeps {
 }
 
 const READ_TOOLS = ['search_extensions', 'get_extension', 'get_reviews', 'get_security', 'market_overview']
+const DOCS_TOOLS = ['search_docs', 'generate_icon_workflow']
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 8 tools', () => {
+	it('stdio (all capabilities) registers all 9 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(names.sort()).toEqual([...READ_TOOLS, 'search_docs', ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(8)
+		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
+		expect(names).toHaveLength(9)
 	})
 
-	it('remote (read + docs only) registers the 6 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 7 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
-		expect(names.sort()).toEqual([...READ_TOOLS, 'search_docs'].sort())
+		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
 		// The security-critical assertion: scan/publish are absent.
 		for (const forbidden of LOCAL_ONLY_TOOLS) {
 			expect(names).not.toContain(forbidden)
 		}
 	})
 
-	it('docs-only registers just search_docs (the keyless free tool)', () => {
+	it('docs-only registers just the keyless free tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['docs']))
-		expect(names).toEqual(['search_docs'])
+		expect(names.sort()).toEqual([...DOCS_TOOLS].sort())
 	})
 
-	it('read capability does not pull in search_docs or local-only tools', () => {
+	it('read capability does not pull in docs tools or local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read']))
 		expect(names.sort()).toEqual([...READ_TOOLS].sort())
 		expect(names).not.toContain('search_docs')
+		expect(names).not.toContain('generate_icon_workflow')
 		expect(names).not.toContain('scan_extension')
 	})
 
@@ -215,7 +217,7 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(8)
+		expect(tools).toHaveLength(9)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')
@@ -370,5 +372,29 @@ describe('isExpectedError', () => {
 	it('a UserError WRAPPING a genuine fault is NOT expected', () => {
 		expect(isExpectedError(wrapping({ status: 500 })), 'api_5xx').toBe(false)
 		expect(isExpectedError(wrapping(new TypeError('x.map is not a function'))), 'bug').toBe(false)
+	})
+})
+
+describe('generate_icon_workflow execute', () => {
+	it('returns the static workflow with the extension name inlined', async () => {
+		const { tools, server } = recordingServer()
+		registerTools(server, depsFor(['docs']))
+		const tool = tools.find((t) => t.name === 'generate_icon_workflow') as unknown as {
+			execute: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<string>
+		}
+		const out = await tool.execute({ extension_name: 'Tab Keeper' }, {})
+		expect(out).toContain('icon preview icon.svg --name "Tab Keeper"')
+		expect(out).toContain('16, 32, 48 and 128 px')
+		expect(out).toContain('No API key')
+	})
+
+	it('falls back to a generic name when none is given', async () => {
+		const { tools, server } = recordingServer()
+		registerTools(server, depsFor(['docs']))
+		const tool = tools.find((t) => t.name === 'generate_icon_workflow') as unknown as {
+			execute: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<string>
+		}
+		const out = await tool.execute({}, {})
+		expect(out).toContain('--name "My Extension"')
 	})
 })

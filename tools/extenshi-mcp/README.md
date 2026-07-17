@@ -42,6 +42,7 @@ enforces it too.
 | `get_security` | Risk score + finding counts + top grouped findings (reads existing scans) | 1 read |
 | `market_overview` | Catalog-wide market intelligence with no args (totals, store split, category tree, and the extended breakdown — MV2/MV3, sensitive permissions, risk tiers, trader status, recency, reviews); pass a `query` to scope facets to a search | 1 read |
 | `search_docs` | Search the Extenshi docs + `@extenshi/cli` reference so the assistant can quote exact commands | Free (no key) |
+| `generate_icon_workflow` | Icon design requirements + the local agent-draws-SVG → `extenshi icon preview` → export workflow | Free (no key) |
 | `scan_extension` | Pre-publish security scan of a local artifact (.zip/.crx/.xpi), with live progress | 1 monthly-quota scan |
 | `publish_extension` | Publish to Chrome/Firefox/Edge with your own store credentials (fully local) | Free |
 
