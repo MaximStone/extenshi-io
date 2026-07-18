@@ -15,7 +15,6 @@
 
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 
-// biome-ignore lint/suspicious/noExplicitAny: BFF AppRouter type is not importable across the published-package boundary (no .d.ts from catalog-api).
 type AnyTRPCClient = any
 
 export interface Bff {

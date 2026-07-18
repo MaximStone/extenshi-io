@@ -115,9 +115,12 @@ describe('registerTools capability gating', () => {
 describe('get_reviews execute — arg mapping', () => {
 	it('maps snake_case tool args to the BFF camelCase input', async () => {
 		// Capture the full tool objects (not just names) so we can drive execute().
-		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
 		const tools: Record<string, any> = {}
-		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
 
 		const calls: Record<string, unknown>[] = []
 		const stubBff = {
@@ -151,9 +154,12 @@ describe('get_reviews execute — arg mapping', () => {
 	})
 
 	it('applies the per-store content policy end-to-end (Chrome text withheld)', async () => {
-		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
 		const tools: Record<string, any> = {}
-		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
 		const stubBff = {
 			getReviews: () =>
 				Promise.resolve({
@@ -186,9 +192,12 @@ describe('get_reviews execute — arg mapping', () => {
 	})
 
 	it('defaults sort to recent when omitted', async () => {
-		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
 		const tools: Record<string, any> = {}
-		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
 		const calls: Record<string, unknown>[] = []
 		const stubBff = {
 			getReviews: (input: Record<string, unknown>) => {
@@ -266,9 +275,12 @@ describe('instrument — expected errors skip exception capture', () => {
 	function getReviewsToolRejectingWith(err: unknown): {
 		execute: (a: unknown, c: unknown) => Promise<unknown>
 	} {
-		// biome-ignore lint/suspicious/noExplicitAny: minimal FastMCP tool stand-in
 		const tools: Record<string, any> = {}
-		const server = { addTool: (t: { name: string }) => (tools[t.name] = t) }
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
 		const stubBff = {
 			getReviews: () => Promise.reject(err),
 		} as unknown as Bff
