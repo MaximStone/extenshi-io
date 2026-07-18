@@ -57,7 +57,7 @@ export const MISSING_KEY_MESSAGE =
 	"This tool needs an Extenshi API key, and you don't have one set up yet — " +
 	"here's how to get going.\n\n" +
 	'Getting started is free: no credit card required. Every account includes a ' +
-	'free monthly allowance (25 catalog reads + 5 scans), so you can explore the ' +
+	'one-time free allowance (10 catalog reads + 3 scans), so you can explore the ' +
 	'catalog and run scans before paying for anything.\n\n' +
 	`1. Create a free account at ${SIGNUP_PAGE}\n` +
 	`2. Grab a key at ${KEY_PAGE}\n` +
@@ -76,8 +76,8 @@ export const SERVER_INSTRUCTIONS =
 	'prefer quoting exact CLI commands and flags from the docs over guessing. Use ' +
 	'generate_icon_workflow (free, no key) when the developer needs an extension icon — it ' +
 	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. The catalog and ' +
-	`scan tools require an Extenshi API key (${KEY_PAGE}). Every account gets a free monthly ` +
-	'allowance — 25 reads and 5 scans per month; beyond it, buy prepaid credit packs (scans ' +
+	`scan tools require an Extenshi API key (${KEY_PAGE}). Every account gets a one-time free ` +
+	'allowance — 10 reads and 3 scans; beyond it, buy prepaid credit packs (scans ' +
 	`and reads, never expire) at ${BILLING_PAGE}.`
 
 // ── Injected dependencies ───────────────────────────────────────────────────
@@ -178,7 +178,7 @@ function scanErrorMessage(err: ScanError, missingKeyMessage: string): string {
 		case 401:
 			return `Authentication failed: ${err.message}\n\n${missingKeyMessage}`
 		case 402:
-			return `Out of scan credits. Buy a scan pack at ${BILLING_PAGE} — the free allowance (5/mo) resets on the 1st (UTC).`
+			return `Out of scan credits. Buy a scan pack at ${BILLING_PAGE} to continue — the one-time free allowance (3 scans) does not renew.`
 		case 403:
 			// FREE_REQUIRES_* came from the pre-credit-pack backend (free scans
 			// were gated on verified ownership). Kept for skew with old backends.
@@ -719,7 +719,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 			name: 'scan_extension',
 			description:
 				'Run a pre-publish security scan on a local extension artifact (.zip/.crx/.xpi) and ' +
-				'return the report. Uses one scan from your free monthly allowance (5 scans/month) or a ' +
+				'return the report. Uses one scan from your one-time free allowance (3 scans) or a ' +
 				'purchased scan credit once that runs out. Streams live per-scanner progress.',
 			parameters: z.object({
 				artifact_path: z

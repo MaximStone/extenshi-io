@@ -296,7 +296,7 @@ describe('instrument — expected errors skip exception capture', () => {
 	const quotaGate = () =>
 		Object.assign(
 			new Error(
-				'Free read allowance exhausted (25/mo). Buy a read pack at https://dojo.extenshi.io/billing — the free allowance resets on the 1st (UTC).',
+				'Free read allowance exhausted (10, one-time). Buy a read pack at https://dojo.extenshi.io/billing to continue.',
 			),
 			{ data: { code: 'TOO_MANY_REQUESTS', httpStatus: 429 } },
 		)

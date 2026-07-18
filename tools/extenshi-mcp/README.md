@@ -43,12 +43,12 @@ enforces it too.
 | `market_overview` | Catalog-wide market intelligence with no args (totals, store split, category tree, and the extended breakdown — MV2/MV3, sensitive permissions, risk tiers, trader status, recency, reviews); pass a `query` to scope facets to a search | 1 read |
 | `search_docs` | Search the Extenshi docs + `@extenshi/cli` reference so the assistant can quote exact commands | Free (no key) |
 | `generate_icon_workflow` | Icon design requirements + the local agent-draws-SVG → `extenshi icon preview` → export workflow | Free (no key) |
-| `scan_extension` | Pre-publish security scan of a local artifact (.zip/.crx/.xpi), with live progress | 1 monthly-quota scan |
+| `scan_extension` | Pre-publish security scan of a local artifact (.zip/.crx/.xpi), with live progress | 1 scan |
 | `publish_extension` | Publish to Chrome/Firefox/Edge with your own store credentials (fully local) | Free |
 
-Every plan includes monthly reads and scans — the Free plan has 25 reads and 5 scans per
-month, paid plans go up to 10,000 reads and 1,000 scans. Quotas reset on the 1st (UTC).
-Manage your plan at https://dojo.extenshi.io/billing.
+Every account gets a one-time free allowance of 10 reads and 3 scans (no card required). Beyond
+that, buy prepaid credit packs (up to 10,000 reads and 1,000 scans per pack) that never expire.
+Manage credits at https://dojo.extenshi.io/billing.
 
 ## Configuration
 
