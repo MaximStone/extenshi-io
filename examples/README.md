@@ -16,9 +16,11 @@ the file and open it locally.
 | `icon-preview.html` | `extenshi icon preview icon.svg --name "Tab Tidy"` | [view rendered](https://htmlpreview.github.io/?https://raw.githubusercontent.com/MaximStone/extenshi-io/main/examples/icon-preview.html) · [source](./icon-preview.html) |
 | `icon.svg` | the input icon used for the preview above | [source](./icon.svg) |
 
-> **These are samples.** The scan example is rendered from a synthetic findings
-> payload for a fictional `sample-extension.zip` — it is the real renderer and the
-> real report layout, but the findings do not describe any real extension. The
+> **These are samples.** The scan example is rendered by the production renderer
+> from a payload shaped exactly like a real scan response — the full eight-check
+> roster, the same per-check finding fields — but for a fictional
+> `sample-extension.zip`. The layout and the numbers-to-UI mapping are real; the
+> findings do not describe any real extension. The
 > icon preview is genuine output from `extenshi icon preview` run on
 > [`icon.svg`](./icon.svg).
 
@@ -35,8 +37,9 @@ the file and open it locally.
 - **Store review prediction** — what will be REJECTED, what causes user
   ATTRITION on update, what merely triggers a SLOW manual review. (Available on
   its own, offline and free, via `extenshi review-risk`.)
-- **Scanner roster** including scanners that failed, so a partial run never looks
-  like a clean one.
+- **Coverage — what we checked**: all eight checks with their finding counts,
+  including the ones that came back clean. A scanner that failed or timed out is
+  called out there too, so a partial run never reads as a clean one.
 - Filters by severity / scanner / free text, a sticky table of contents, and a
   light–dark toggle. Try the toggle in the rendered view.
 

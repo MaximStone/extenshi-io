@@ -56,7 +56,7 @@ Manifest V3 forbids remotely-hosted and dynamically-evaluated code. A manifest t
 
 **Found:** `manifest.json → content_security_policy.extension_pages: script-src 'self' 'unsafe-eval'`
 
-**How to fix:** Drop 'unsafe-eval' and compile the rules engine ahead of time, or ship a WASM/JSON interpreter instead of eval().
+**How to fix:** Drop the relaxed directive and compile the rules engine ahead of time, or ship a WASM/JSON interpreter instead.
 
 _Chrome Web Store — Manifest V3 remote code policy_
 
@@ -102,38 +102,37 @@ _Manifest diff against the last published version was skipped — pass --extensi
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| eval-usage | scanner-2 | vendor/analytics.bundle.js:1842 |
-| eval-usage | scanner-2 | vendor/analytics.bundle.js:2907 |
-| eval-usage | scanner-2 | src/background/rules-engine.js:64 |
+| dynamic-code-execution | scanner-2 | vendor/analytics.bundle.js:1842 |
+| dynamic-code-execution | scanner-2 | vendor/analytics.bundle.js:2907 |
+| dynamic-code-execution | scanner-2 | src/background/rules-engine.js:64 |
 
-### HIGH (3)
-
-| Finding | Scanner | Location |
-|---------|---------|----------|
-| innerhtml-assignment | scanner-2 | src/content/panel.js:212 |
-| innerhtml-assignment | scanner-2 | src/content/tooltip.js:47 |
-| remote-code-load | scanner-1 | src/background/loader.js:33 |
-
-### MEDIUM (2)
+### HIGH (4)
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| http-endpoint | scanner-2 | src/background/sync.js:18 |
-| broad-host-permission | scanner-1 | manifest.json |
+| csp_unsafe_eval | scanner-1 | manifest.json |
+| unsanitized-innerhtml | scanner-2 | src/content/panel.js:212 |
+| unsanitized-innerhtml | scanner-2 | src/content/tooltip.js:47 |
+| vulnerable_dependency | scanner-8 | vendor/analytics.bundle.js |
 
-### LOW (1)
+### MEDIUM (3)
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| high-entropy-identifiers | scanner-6 | vendor/analytics.bundle.js |
+| broad_host_permission | scanner-1 | manifest.json |
+| periodic_beacon | scanner-4 | src/background/sync.js |
+| fetch | scanner-5 | src/background/sync.js |
+
+### LOW (2)
+
+| Finding | Scanner | Location |
+|---------|---------|----------|
+| script | scanner-5 | vendor/analytics.bundle.js |
+| high_entropy_identifiers | scanner-6 | vendor/analytics.bundle.js:1 |
 
 ## Scanner status
 
-5/6 scanners succeeded.
-
-| Scanner | Status | Detail |
-|---------|--------|--------|
-| scanner-8 | failed | scanner timed out after 180s on a 41 MB bundle |
+8/8 scanners succeeded.
 
 ## Notes
 

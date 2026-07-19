@@ -2,99 +2,189 @@
   "jobId": "sample-0000-0000-0000",
   "scanners": [
     {
-      "scanner_name": "scanner-2",
+      "scanner_name": "scanner-1",
       "status": "completed",
+      "risk_score": 58,
+      "execution_time": 2.4,
+      "error": null,
       "findings": [
         {
-          "rule_id": "eval-usage",
-          "message": "Dynamic code execution via eval()",
-          "severity": "critical",
-          "file": "vendor/analytics.bundle.js",
-          "line": 1842
-        },
-        {
-          "rule_id": "eval-usage",
-          "message": "Dynamic code execution via eval()",
-          "severity": "critical",
-          "file": "vendor/analytics.bundle.js",
-          "line": 2907
-        },
-        {
-          "rule_id": "eval-usage",
-          "message": "Dynamic code execution via eval()",
-          "severity": "critical",
-          "file": "src/background/rules-engine.js",
-          "line": 64
-        },
-        {
-          "rule_id": "innerhtml-assignment",
-          "message": "Untrusted value assigned to innerHTML",
-          "severity": "high",
-          "file": "src/content/panel.js",
-          "line": 212
-        },
-        {
-          "rule_id": "innerhtml-assignment",
-          "message": "Untrusted value assigned to innerHTML",
-          "severity": "high",
-          "file": "src/content/tooltip.js",
-          "line": 47
-        },
-        {
-          "rule_id": "http-endpoint",
-          "message": "Plaintext http:// endpoint in fetch()",
+          "type": "broad_host_permission",
           "severity": "medium",
-          "file": "src/background/sync.js",
-          "line": 18
+          "message": "Content scripts match <all_urls>, granting access to every site the user visits",
+          "file": "manifest.json",
+          "analyzer": "permission"
+        },
+        {
+          "type": "csp_unsafe_eval",
+          "severity": "high",
+          "message": "content_security_policy.extension_pages allows 'unsafe-eval'",
+          "file": "manifest.json",
+          "analyzer": "manifest"
         }
       ]
     },
     {
-      "scanner_name": "scanner-1",
+      "scanner_name": "scanner-2",
       "status": "completed",
+      "risk_score": 71,
+      "execution_time": 38.6,
+      "error": null,
       "findings": [
         {
-          "rule_id": "remote-code-load",
-          "message": "Script tag injected from a remote origin at runtime",
-          "severity": "high",
-          "file": "src/background/loader.js",
-          "line": 33
+          "rule_id": "dynamic-code-execution",
+          "severity": "critical",
+          "message": "Dynamic code execution via eval()",
+          "file_path": "vendor/analytics.bundle.js",
+          "line_number": 1842,
+          "confidence": 0.9,
+          "category": "security"
         },
         {
-          "rule_id": "broad-host-permission",
-          "message": "Content script matches <all_urls>",
+          "rule_id": "dynamic-code-execution",
+          "severity": "critical",
+          "message": "Dynamic code execution via eval()",
+          "file_path": "vendor/analytics.bundle.js",
+          "line_number": 2907,
+          "confidence": 0.9,
+          "category": "security"
+        },
+        {
+          "rule_id": "dynamic-code-execution",
+          "severity": "critical",
+          "message": "Dynamic code execution via eval()",
+          "file_path": "src/background/rules-engine.js",
+          "line_number": 64,
+          "confidence": 0.9,
+          "category": "security"
+        },
+        {
+          "rule_id": "unsanitized-innerhtml",
+          "severity": "high",
+          "message": "Untrusted value assigned to innerHTML",
+          "file_path": "src/content/panel.js",
+          "line_number": 212,
+          "confidence": 0.75,
+          "category": "security"
+        },
+        {
+          "rule_id": "unsanitized-innerhtml",
+          "severity": "high",
+          "message": "Untrusted value assigned to innerHTML",
+          "file_path": "src/content/tooltip.js",
+          "line_number": 47,
+          "confidence": 0.75,
+          "category": "security"
+        }
+      ]
+    },
+    {
+      "scanner_name": "scanner-3",
+      "status": "completed",
+      "risk_score": 0,
+      "execution_time": 1.1,
+      "error": null,
+      "findings": []
+    },
+    {
+      "scanner_name": "scanner-4",
+      "status": "completed",
+      "risk_score": 34,
+      "execution_time": 12.9,
+      "error": null,
+      "findings": [
+        {
+          "file": "src/background/sync.js",
+          "pattern": "periodic_beacon",
+          "category": "data_exfil",
           "severity": "medium",
-          "file": "manifest.json"
+          "confidence": 0.62,
+          "is_malicious": false,
+          "description": "Repeating timer posts collected page data to a remote endpoint",
+          "count": 3
         }
       ]
     },
     {
       "scanner_name": "scanner-5",
       "status": "completed",
-      "findings": []
+      "risk_score": 22,
+      "execution_time": 6.3,
+      "error": null,
+      "findings": [
+        {
+          "file": "src/background/sync.js",
+          "url": "http://telemetry.example-vendor.net/collect",
+          "type": "fetch",
+          "kind": "absolute",
+          "risk_level": "medium",
+          "severity": "medium",
+          "is_external": true,
+          "method": "POST",
+          "context_type": "xhr"
+        },
+        {
+          "file": "vendor/analytics.bundle.js",
+          "url": "https://cdn.example-vendor.net/loader.js",
+          "type": "script",
+          "kind": "absolute",
+          "risk_level": "low",
+          "severity": "low",
+          "is_external": true,
+          "method": "GET",
+          "context_type": "script"
+        }
+      ]
     },
     {
       "scanner_name": "scanner-6",
       "status": "completed",
+      "risk_score": 18,
+      "execution_time": 4.7,
+      "error": null,
       "findings": [
         {
-          "rule_id": "high-entropy-identifiers",
-          "message": "Bundle uses machine-generated identifiers throughout (entropy 4.7)",
-          "severity": "low",
-          "file": "vendor/analytics.bundle.js"
+          "id": "obf-0001",
+          "rule_id": "high_entropy_identifiers",
+          "severity": "LOW",
+          "confidence": 0.68,
+          "category": "obfuscation",
+          "description": "Machine-generated identifiers throughout the bundle (entropy 4.7)",
+          "location": {
+            "file": "vendor/analytics.bundle.js",
+            "line": 1
+          }
         }
       ]
     },
     {
       "scanner_name": "scanner-7",
       "status": "completed",
+      "risk_score": 0,
+      "execution_time": 3.8,
+      "error": null,
       "findings": []
     },
     {
       "scanner_name": "scanner-8",
-      "status": "failed",
-      "error": "scanner timed out after 180s on a 41 MB bundle",
-      "findings": []
+      "status": "completed",
+      "risk_score": 45,
+      "execution_time": 9.2,
+      "error": null,
+      "findings": [
+        {
+          "rule_id": "vulnerable_dependency",
+          "severity": "high",
+          "category": "third_party_library",
+          "summary": "Bundled copy of a library version with a known prototype-pollution advisory",
+          "file_path": "vendor/analytics.bundle.js",
+          "package": {
+            "name": "lodash",
+            "version": "4.17.11",
+            "ecosystem": "npm"
+          }
+        }
+      ]
     }
   ],
   "riskAssessment": {
@@ -161,7 +251,7 @@
         "title": "CSP allows 'unsafe-eval'",
         "detail": "Manifest V3 forbids remotely-hosted and dynamically-evaluated code. A manifest that relaxes script-src with 'unsafe-eval' is rejected automatically, before a human reviewer looks at the listing.",
         "evidence": "manifest.json → content_security_policy.extension_pages: script-src 'self' 'unsafe-eval'",
-        "recommendation": "Drop 'unsafe-eval' and compile the rules engine ahead of time, or ship a WASM/JSON interpreter instead of eval().",
+        "recommendation": "Drop the relaxed directive and compile the rules engine ahead of time, or ship a WASM/JSON interpreter instead.",
         "citation": "Chrome Web Store — Manifest V3 remote code policy"
       },
       {
