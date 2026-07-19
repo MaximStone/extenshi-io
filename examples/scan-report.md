@@ -102,30 +102,30 @@ _Manifest diff against the last published version was skipped — pass --extensi
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| eval-usage | semgrep | vendor/analytics.bundle.js:1842 |
-| eval-usage | semgrep | vendor/analytics.bundle.js:2907 |
-| eval-usage | semgrep | src/background/rules-engine.js:64 |
+| eval-usage | scanner-2 | vendor/analytics.bundle.js:1842 |
+| eval-usage | scanner-2 | vendor/analytics.bundle.js:2907 |
+| eval-usage | scanner-2 | src/background/rules-engine.js:64 |
 
 ### HIGH (3)
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| innerhtml-assignment | semgrep | src/content/panel.js:212 |
-| innerhtml-assignment | semgrep | src/content/tooltip.js:47 |
-| remote-code-load | static-scan | src/background/loader.js:33 |
+| innerhtml-assignment | scanner-2 | src/content/panel.js:212 |
+| innerhtml-assignment | scanner-2 | src/content/tooltip.js:47 |
+| remote-code-load | scanner-1 | src/background/loader.js:33 |
 
 ### MEDIUM (2)
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| http-endpoint | semgrep | src/background/sync.js:18 |
-| broad-host-permission | static-scan | manifest.json |
+| http-endpoint | scanner-2 | src/background/sync.js:18 |
+| broad-host-permission | scanner-1 | manifest.json |
 
 ### LOW (1)
 
 | Finding | Scanner | Location |
 |---------|---------|----------|
-| high-entropy-identifiers | obfuscation-detector | vendor/analytics.bundle.js |
+| high-entropy-identifiers | scanner-6 | vendor/analytics.bundle.js |
 
 ## Scanner status
 
@@ -133,7 +133,7 @@ _Manifest diff against the last published version was skipped — pass --extensi
 
 | Scanner | Status | Detail |
 |---------|--------|--------|
-| app-inspector | failed | scanner timed out after 180s on a 41 MB bundle |
+| scanner-8 | failed | scanner timed out after 180s on a 41 MB bundle |
 
 ## Notes
 

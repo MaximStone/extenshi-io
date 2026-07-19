@@ -2,7 +2,7 @@
   "jobId": "sample-0000-0000-0000",
   "scanners": [
     {
-      "scanner_name": "semgrep",
+      "scanner_name": "scanner-2",
       "status": "completed",
       "findings": [
         {
@@ -50,7 +50,7 @@
       ]
     },
     {
-      "scanner_name": "static-scan",
+      "scanner_name": "scanner-1",
       "status": "completed",
       "findings": [
         {
@@ -69,12 +69,12 @@
       ]
     },
     {
-      "scanner_name": "clamav",
+      "scanner_name": "scanner-5",
       "status": "completed",
       "findings": []
     },
     {
-      "scanner_name": "obfuscation-detector",
+      "scanner_name": "scanner-6",
       "status": "completed",
       "findings": [
         {
@@ -86,12 +86,12 @@
       ]
     },
     {
-      "scanner_name": "yara",
+      "scanner_name": "scanner-7",
       "status": "completed",
       "findings": []
     },
     {
-      "scanner_name": "app-inspector",
+      "scanner_name": "scanner-8",
       "status": "failed",
       "error": "scanner timed out after 180s on a 41 MB bundle",
       "findings": []
