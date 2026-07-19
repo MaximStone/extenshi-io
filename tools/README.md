@@ -10,12 +10,15 @@ Extenshi API key and talk to the public backend — there is nothing to self-hos
 
 ---
 
-## `@extenshi/cli` — pre-publish security scanner
+## `@extenshi/cli` — scan, predict the review, preview the icon, publish
 
 [![npm](https://img.shields.io/npm/v/@extenshi/cli)](https://www.npmjs.com/package/@extenshi/cli)
 
+→ **[Full command reference](./extenshi-cli/)** · **[Example output](../examples/)**
+
 Scan a built extension artifact (`.zip` / `.crx` / `.xpi`) for security and
-supply-chain risks **before** you ship it to the stores. Designed to run in CI.
+supply-chain risks **before** you ship it — and check the things that actually
+get releases rejected. Designed to run in CI.
 
 ```bash
 # one-off scan, no install:
@@ -23,15 +26,19 @@ npx @extenshi/cli@latest scan ./dist/my-extension.zip
 
 # or install it:
 npm i -g @extenshi/cli
-extenshi login              # stores your key in ~/.extenshi/config.json
-extenshi scan ./build.zip
-extenshi review-risk ./build.zip
-extenshi publish            # push to Chrome / Firefox / Edge with your own store creds
+extenshi login                        # stores your key in ~/.extenshi/config.json
+extenshi scan ./build.zip             # security scan → HTML report (1 scan credit)
+extenshi review-risk ./build.zip      # store-review prediction (free, offline)
+extenshi icon preview ./icon.svg      # icon in real toolbars (free, offline)
+extenshi publish ./build.zip          # push to Chrome / Firefox / Edge with your own store creds
 ```
 
+Only `scan` needs an API key — `review-risk`, `icon preview`, and `publish` run
+without an Extenshi account.
+
 In CI, set `EXTENSHI_API_KEY` as a secret and fail the build on high-risk
-findings. Full command reference and flags:
-<https://docs.extenshi.io> (or `npx @extenshi/cli@latest --help`).
+findings. Every command and flag is documented in
+[`extenshi-cli/README.md`](./extenshi-cli/) (and `npx @extenshi/cli@latest --help`).
 
 ---
 
@@ -68,8 +75,13 @@ over stdio.
 | `get_related_extensions` | Similar / competing extensions for competitive analysis | 1 read |
 | `market_overview` | Aggregate catalog stats + facet counts | 1 read |
 | `search_docs` | Search the docs + CLI reference so the assistant can quote exact commands | **Free (no key)** |
+| `generate_icon_workflow` | Returns the local draw-SVG → toolbar-preview → export workflow for extension icons | **Free (no key)** |
 | `scan_extension` | Pre-publish security scan of a local artifact, with live progress | 1 scan |
 | `publish_extension` | Publish to the stores with your own credentials (fully local) | Free |
+
+Not using MCP? The same icon workflow ships as a plain
+[`SKILL.md`](../skills/extension-icon-design/) for Claude Code and other
+instruction-file agents.
 
 Quotas reset on the 1st (UTC); manage your plan at
 <https://dojo.extenshi.io/billing>.

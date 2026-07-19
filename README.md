@@ -39,10 +39,22 @@ backend with your own API key — there's nothing to host.
 
 | Tool | Install | What it does |
 |---|---|---|
-| **`@extenshi/cli`** | `npx @extenshi/cli@latest` | Pre-publish **security scanner** for `.zip` / `.crx` / `.xpi` artifacts. Runs in CI. |
+| **`@extenshi/cli`** | `npx @extenshi/cli@latest` | **Security scanner**, **store-review predictor**, **icon toolbar preview**, and **multi-store publisher** for `.zip` / `.crx` / `.xpi` artifacts. Runs in CI. |
 | **`@extenshi/mcp`** | `npx @extenshi/mcp@latest` | **MCP server** that brings the catalog + scanning into Claude, Cursor, and other AI tools. |
 
-→ See [**tools/**](./tools/) for setup, examples, and the full tool reference.
+→ [**Full CLI command reference**](./tools/extenshi-cli/) — every command and flag
+→ [**Example output**](./examples/) — see the HTML report and the icon preview before installing anything
+→ [**Agent skills**](./skills/) — free `SKILL.md` files your coding agent can pick up
+→ [**tools/**](./tools/) — setup for both npm packages
+
+Most of the CLI is **free and offline** — only `scan` spends a credit:
+
+```bash
+npx @extenshi/cli@latest icon preview ./icon.svg --name "My Extension"   # free, offline
+npx @extenshi/cli@latest review-risk ./dist/my-extension.zip             # free, offline
+npx @extenshi/cli@latest publish ./dist/my-extension.zip                 # free, your own store creds
+npx @extenshi/cli@latest scan ./dist/my-extension.zip                    # 1 scan credit
+```
 
 ```jsonc
 // Add the catalog to any MCP client (Claude Code / Desktop / Cursor):
@@ -58,6 +70,41 @@ backend with your own API key — there's nothing to host.
 ```
 
 `search_docs` works **without an API key** — point any agent at our docs for free.
+
+---
+
+## 🆓 Free, no account needed
+
+Everything in this list works without signing up. Bookmark what's useful.
+
+**In your terminal** — [`@extenshi/cli`](./tools/extenshi-cli/):
+
+| | |
+|---|---|
+| `extenshi icon preview <icon>` | Your icon at 16 px in real Chrome / Firefox / Edge toolbars, contrast + canvas checks, PNG & ZIP export. Fully offline. [See the output →](./examples/) |
+| `extenshi review-risk <artifact>` | Predicts the store review: what gets **rejected**, what causes **user attrition** on update, what triggers a **slow** manual review. Fully offline. |
+| `extenshi publish <artifact>` | Publishes to Chrome / Firefox / Edge with *your own* store credentials — uploads go straight from your machine to the stores. |
+
+**For your coding agent:**
+
+| | |
+|---|---|
+| [`extension-icon-design` skill](./skills/extension-icon-design/) | One `SKILL.md`: your agent draws the icon, verifies it in the toolbar mockups, iterates on the warnings, exports the store set. |
+| `search_docs` (MCP) | Search the product docs + CLI reference from any MCP client. **No API key.** |
+| `generate_icon_workflow` (MCP) | Serves the icon workflow above to any connected agent. **No API key.** |
+
+**In your browser** — free web tools:
+
+| | |
+|---|---|
+| [Extension safety check](https://extenshi.io/check) | Paste a store URL, see what an extension can access before you install it |
+| [Manifest generator](https://extenshi.io/manifest-generator) | Build a valid MV3 `manifest.json` |
+| [Icon generator & toolbar preview](https://extenshi.io/icon-generator) | The same preview as the CLI, in the browser |
+| [Privacy-policy generator](https://extenshi.io/policy-generator) | A store-acceptable privacy policy for your extension |
+| [Catalog search](https://catalog.extenshi.io) | 324k+ extensions across three stores, with risk ratings |
+| [Methodology](https://docs.extenshi.io/methodology) | How the scanning and risk scoring actually work — and their limits |
+
+**Open data:** the [research reports](#-public-research) below are CC BY 4.0.
 
 ---
 
@@ -81,6 +128,8 @@ Whether it's in **our** platform or in an **extension** we list, see
 ---
 
 ## Links
+
+**In this repo:** [CLI reference](./tools/extenshi-cli/) · [example output](./examples/) · [agent skills](./skills/) · [tools setup](./tools/) · [research reports](./reports/) · [security policy](./SECURITY.md)
 
 - Website — <https://extenshi.io>
 - Catalog — <https://catalog.extenshi.io>

@@ -1,0 +1,196 @@
+{
+  "jobId": "sample-0000-0000-0000",
+  "scanners": [
+    {
+      "scanner_name": "semgrep",
+      "status": "completed",
+      "findings": [
+        {
+          "rule_id": "eval-usage",
+          "message": "Dynamic code execution via eval()",
+          "severity": "critical",
+          "file": "vendor/analytics.bundle.js",
+          "line": 1842
+        },
+        {
+          "rule_id": "eval-usage",
+          "message": "Dynamic code execution via eval()",
+          "severity": "critical",
+          "file": "vendor/analytics.bundle.js",
+          "line": 2907
+        },
+        {
+          "rule_id": "eval-usage",
+          "message": "Dynamic code execution via eval()",
+          "severity": "critical",
+          "file": "src/background/rules-engine.js",
+          "line": 64
+        },
+        {
+          "rule_id": "innerhtml-assignment",
+          "message": "Untrusted value assigned to innerHTML",
+          "severity": "high",
+          "file": "src/content/panel.js",
+          "line": 212
+        },
+        {
+          "rule_id": "innerhtml-assignment",
+          "message": "Untrusted value assigned to innerHTML",
+          "severity": "high",
+          "file": "src/content/tooltip.js",
+          "line": 47
+        },
+        {
+          "rule_id": "http-endpoint",
+          "message": "Plaintext http:// endpoint in fetch()",
+          "severity": "medium",
+          "file": "src/background/sync.js",
+          "line": 18
+        }
+      ]
+    },
+    {
+      "scanner_name": "static-scan",
+      "status": "completed",
+      "findings": [
+        {
+          "rule_id": "remote-code-load",
+          "message": "Script tag injected from a remote origin at runtime",
+          "severity": "high",
+          "file": "src/background/loader.js",
+          "line": 33
+        },
+        {
+          "rule_id": "broad-host-permission",
+          "message": "Content script matches <all_urls>",
+          "severity": "medium",
+          "file": "manifest.json"
+        }
+      ]
+    },
+    {
+      "scanner_name": "clamav",
+      "status": "completed",
+      "findings": []
+    },
+    {
+      "scanner_name": "obfuscation-detector",
+      "status": "completed",
+      "findings": [
+        {
+          "rule_id": "high-entropy-identifiers",
+          "message": "Bundle uses machine-generated identifiers throughout (entropy 4.7)",
+          "severity": "low",
+          "file": "vendor/analytics.bundle.js"
+        }
+      ]
+    },
+    {
+      "scanner_name": "yara",
+      "status": "completed",
+      "findings": []
+    },
+    {
+      "scanner_name": "app-inspector",
+      "status": "failed",
+      "error": "scanner timed out after 180s on a 41 MB bundle",
+      "findings": []
+    }
+  ],
+  "riskAssessment": {
+    "overallScore": 46.2,
+    "riskCategory": "MEDIUM",
+    "calculationVersion": "sample"
+  },
+  "compliance": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "manifestVersion": 3,
+    "manifestRiskScore": 62,
+    "findings": [
+      {
+        "ruleId": "manifest_csp_weakened",
+        "severity": "HIGH",
+        "label": "Weakened content security policy",
+        "summary": "extension_pages relaxes the default CSP with 'unsafe-eval', which Chrome Web Store rejects for MV3 submissions.",
+        "evidence": [
+          "extension_pages: script-src 'self' 'unsafe-eval'"
+        ],
+        "storeImpact": "REJECTION_LIKELY",
+        "stores": [
+          "CHROME",
+          "EDGE"
+        ],
+        "remediation": "Remove 'unsafe-eval' and precompile any dynamic rules at build time."
+      },
+      {
+        "ruleId": "manifest_broad_host_permissions",
+        "severity": "MEDIUM",
+        "label": "Broad host permissions",
+        "summary": "<all_urls> grants read/write access to every site the user visits and triggers a manual review.",
+        "evidence": [
+          "host_permissions: <all_urls>"
+        ],
+        "storeImpact": "REVIEW_DELAY",
+        "stores": [
+          "CHROME",
+          "FIREFOX",
+          "EDGE"
+        ],
+        "remediation": "Narrow to the origins you actually need, or move to the optional_host_permissions + activeTab pattern."
+      }
+    ],
+    "flags": {
+      "cspWeakened": true,
+      "broadHostPermissions": true
+    }
+  },
+  "complianceReview": {
+    "available": true,
+    "blocking": true,
+    "diffNote": "Manifest diff against the last published version was skipped — pass --extension-id to enable it.",
+    "counts": {
+      "REJECTED": 1,
+      "ATTRITION": 1,
+      "SLOW": 2
+    },
+    "findings": [
+      {
+        "verdict": "REJECTED",
+        "check": "csp_unsafe_eval",
+        "title": "CSP allows 'unsafe-eval'",
+        "detail": "Manifest V3 forbids remotely-hosted and dynamically-evaluated code. A manifest that relaxes script-src with 'unsafe-eval' is rejected automatically, before a human reviewer looks at the listing.",
+        "evidence": "manifest.json → content_security_policy.extension_pages: script-src 'self' 'unsafe-eval'",
+        "recommendation": "Drop 'unsafe-eval' and compile the rules engine ahead of time, or ship a WASM/JSON interpreter instead of eval().",
+        "citation": "Chrome Web Store — Manifest V3 remote code policy"
+      },
+      {
+        "verdict": "ATTRITION",
+        "check": "new_permission_on_update",
+        "title": "Update adds a permission that disables the extension for existing users",
+        "detail": "Adding \"history\" to an already-published extension puts it in a disabled state until every existing user manually re-grants the permission. Historically this costs a large share of the active install base.",
+        "evidence": "permissions: +history",
+        "recommendation": "Move \"history\" to optional_permissions and request it at runtime from the feature that needs it.",
+        "citation": "Chrome — permission warnings on update"
+      },
+      {
+        "verdict": "SLOW",
+        "check": "broad_host_permissions",
+        "title": "<all_urls> host permission triggers manual review",
+        "detail": "Extensions requesting access to all sites are routed to a manual reviewer, typically adding days to the review queue.",
+        "evidence": "host_permissions: <all_urls>",
+        "recommendation": "Request specific origins, or use activeTab for click-driven access.",
+        "citation": "Chrome Web Store — review times"
+      },
+      {
+        "verdict": "SLOW",
+        "check": "large_minified_bundle",
+        "title": "Large minified vendor bundle without a readable source",
+        "detail": "A 41 MB minified bundle with no source map slows down human review and frequently draws a request for reviewable source.",
+        "evidence": "vendor/analytics.bundle.js (41 MB, minified, no source map)",
+        "recommendation": "Ship a source map or an unminified build alongside the artifact.",
+        "citation": "Chrome Web Store — code readability requirements"
+      }
+    ]
+  }
+}

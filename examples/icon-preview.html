@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab Tidy — icon preview · Extenshi</title>
+<script>(function(){try{var t=localStorage.getItem('extenshi-report-theme');if(!t)t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';if(t==='dark')document.documentElement.classList.add('dark');}catch(e){}})();</script>
+<style>
+/* Report palette — the real extenshi.io tokens, shared with the scan report:
+   warm terracotta on paper (light), green on near-black (dark). The --t-*
+   variables are the SIMULATED browser toolbar colors and are independent of
+   the report theme (they're driven by the palette chips). */
+:root {
+	--bg: oklch(0.9711 0.0074 80.7211);
+	--surface: oklch(0.99 0.005 80);
+	--surface-2: oklch(0.937 0.0142 74.4218);
+	--fg: oklch(0.3 0.0358 30.2042);
+	--muted-fg: oklch(0.4495 0.0486 39.211);
+	--border: oklch(0.8805 0.0208 74.6428);
+	--primary: oklch(0.7234 0.1783 41.1468);
+	--primary-fg: oklch(1 0 0);
+	--shadow: 0 1px 3px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+	--font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+	/* Back-compat aliases so the rest of the sheet keeps its names. */
+	--page-bg: var(--bg); --page-text: var(--fg); --card: var(--surface); --card-border: var(--border); --accent: var(--primary);
+	/* Simulated browser toolbar (chip-controlled, theme-independent). */
+	--t-toolbar: #ffffff; --t-tabstrip: #dfe1e5; --t-url: #f1f3f4;
+	--t-text: #202124; --t-muted: #5f6368; --t-border: rgba(0,0,0,.12);
+}
+html.dark {
+	--bg: oklch(0.1377 0.0167 150.7681);
+	--surface: oklch(0.1961 0.0163 146.9867);
+	--surface-2: oklch(0.2335 0.0184 146.9867);
+	--fg: oklch(0.9423 0.0097 72.6595);
+	--muted-fg: oklch(0.79 0.0174 76.0955);
+	--border: oklch(0.2644 0.0159 142.9926);
+	--primary: oklch(0.6731 0.1624 144.2083);
+	--primary-fg: oklch(0.2157 0.0453 145.7256);
+	--shadow: 0 1px 3px hsl(0 0% 0% / 0.4), 0 1px 2px -1px hsl(0 0% 0% / 0.4);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+	font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+	font-feature-settings: "ss01", "ss02", "cv11"; -webkit-font-smoothing: antialiased;
+	background: var(--bg); color: var(--fg);
+}
+code, .mono { font-family: var(--font-mono); }
+main { max-width: 1080px; margin: 0 auto; display: grid; gap: 22px; padding: 28px 20px 72px; }
+
+/* Sticky topbar — mirrors the scan report chrome. */
+.topbar {
+	position: sticky; top: 0; z-index: 20;
+	display: flex; align-items: center; gap: 12px; padding: 14px 24px;
+	background: color-mix(in oklab, var(--bg) 85%, transparent);
+	backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+}
+.topbar .logo { color: var(--primary); display: inline-flex; }
+.topbar .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.topbar .sep { color: var(--muted-fg); }
+.topbar .subtitle { color: var(--muted-fg); font-size: 0.9rem; }
+.topbar .spacer { flex: 1; }
+.tg {
+	display: inline-flex; align-items: center; gap: 6px;
+	border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+	border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.tg:hover { border-color: var(--primary); }
+
+.page-head .brand { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+.page-head h1 { font-size: 24px; margin-top: 2px; letter-spacing: -0.01em; }
+.page-head .meta { color: var(--muted-fg); font-size: 12.5px; margin-top: 2px; }
+section.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; box-shadow: var(--shadow); }
+section.card > h2 { font-size: 15px; margin-bottom: 12px; }
+h2 .hint { font-weight: 400; font-size: 12.5px; color: var(--muted-fg); margin-left: 8px; }
+
+/* Palette chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip {
+	display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
+	border: 1px solid var(--card-border); background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 13px;
+}
+.chip .sw { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.2); }
+.chip.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.custom { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; margin-left: 4px; }
+.custom input { width: 30px; height: 30px; border: none; background: none; padding: 0; cursor: pointer; }
+
+/* Browser mockups */
+#mockups { display: grid; gap: 18px; }
+.browser h3 { font-size: 13px; color: color-mix(in srgb, var(--page-text) 60%, transparent); margin-bottom: 6px; }
+.bwin { border-radius: 10px; overflow: hidden; border: 1px solid var(--t-border); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.tabs { display: flex; align-items: flex-end; gap: 2px; padding: 7px 10px 0; background: var(--t-tabstrip); }
+.tab {
+	display: flex; align-items: center; gap: 7px; padding: 6px 12px; font-size: 12px; color: var(--t-muted);
+	border-radius: 8px 8px 0 0; max-width: 190px; white-space: nowrap; overflow: hidden;
+}
+.tab.active { background: var(--t-toolbar); color: var(--t-text); }
+.tab .fav { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--t-muted) 55%, transparent); flex: none; }
+.tab .tab-title { overflow: hidden; text-overflow: ellipsis; }
+.tab .tab-x { margin-left: 4px; opacity: .6; }
+.newtab { align-self: center; padding: 0 10px 4px; color: var(--t-muted); font-size: 15px; }
+.lights { display: inline-flex; align-items: center; gap: 6.5px; align-self: center; padding: 0 10px 4px 6px; }
+.lights .l { width: 11px; height: 11px; border-radius: 50%; }
+.lights .l.r { background: #ff5f57; }
+.lights .l.y { background: #febc2e; }
+.lights .l.g { background: #28c840; }
+.firefox .tabs { padding: 6px 8px; align-items: center; }
+.firefox .tab { border-radius: 6px; margin-bottom: 0; padding: 7px 12px; min-width: 150px; }
+.firefox .tab.active { box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.firefox .tab .tab-x { margin-left: auto; }
+.firefox .lights, .firefox .newtab { padding-bottom: 0; }
+.strip-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; color: var(--t-muted); }
+.strip-btn.chevron { font-size: 12px; }
+.strip-spacer { flex: 1; }
+.firefox .urlbar .placeholder { opacity: .75; }
+.edge .tab { border-radius: 6px 6px 0 0; }
+.toolbar { display: flex; align-items: center; gap: 6px; padding: 7px 12px; background: var(--t-toolbar); color: var(--t-text); }
+.navbtn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--t-muted); font-size: 14px; flex: none; }
+.navbtn.dim { opacity: .45; }
+.urlbar {
+	flex: 1; display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px;
+	background: var(--t-url); color: var(--t-muted); border-radius: 999px; font-size: 12.5px; min-width: 120px;
+}
+.firefox .urlbar, .edge .urlbar { border-radius: 7px; }
+.lock { display: inline-flex; opacity: .8; }
+.pins { display: flex; align-items: center; gap: 2px; padding: 0 2px; }
+.pin { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; flex: none; }
+.pin:hover { background: color-mix(in srgb, var(--t-muted) 18%, transparent); }
+.pin img { display: block; }
+.pin.puzzle { color: var(--t-muted); }
+.pin.yours.hl { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+.avatar { width: 24px; height: 24px; border-radius: 50%; flex: none; background: linear-gradient(135deg, #b7c4d8, #7e93b1); }
+.menu { color: var(--t-muted); padding: 0 4px; font-size: 15px; }
+.pagearea { height: 44px; background: color-mix(in srgb, var(--t-toolbar) 60%, var(--page-bg)); border-top: 1px solid var(--t-border); }
+
+/* Chrome puzzle dropdown */
+.extmenu {
+	width: 300px; margin: 10px 0 0 auto; background: var(--t-toolbar); color: var(--t-text);
+	border: 1px solid var(--t-border); border-radius: 10px; padding: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+}
+.extmenu-title { font-size: 12px; font-weight: 600; padding: 4px 8px 8px; color: var(--t-muted); }
+.extmenu-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 7px; font-size: 13px; }
+.extmenu-row:hover { background: color-mix(in srgb, var(--t-muted) 14%, transparent); }
+.extmenu-row.you { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.extmenu-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extmenu-pin { color: var(--t-muted); display: inline-flex; }
+.extmenu-pin.dim { opacity: .4; }
+.extmenu-row.you .extmenu-pin { color: var(--accent); }
+
+/* Contrast grid */
+#contrast-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.cg-cell { border: 1px solid var(--card-border); border-radius: 9px; overflow: hidden; }
+.cg-strip { display: flex; align-items: center; gap: 2px; padding: 9px 12px; }
+.cg-strip .pin { width: 26px; height: 26px; }
+.cg-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; font-size: 12px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.badge.ok { background: color-mix(in srgb, #22c55e 18%, transparent); color: #15803d; }
+.badge.weak { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #b45309; }
+.badge.bad { background: color-mix(in srgb, #ef4444 20%, transparent); color: #b91c1c; }
+html.dark .badge.ok { color: #4ade80; }
+html.dark .badge.weak { color: #fbbf24; }
+html.dark .badge.bad { color: #f87171; }
+
+/* Size matrix + magnifier */
+.size-flex { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-end; }
+.size-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: color-mix(in srgb, var(--page-text) 60%, transparent); }
+.checker {
+	display: inline-flex; align-items: center; justify-content: center; padding: 8px; border-radius: 8px; border: 1px solid var(--card-border);
+	background: repeating-conic-gradient(rgba(128,128,128,.16) 0% 25%, transparent 0% 50%); background-size: 14px 14px;
+}
+.mag-wrap { display: flex; gap: 18px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+#mag { image-rendering: pixelated; width: 128px; height: 128px; border-radius: 8px; }
+.mag-box { display: inline-flex; padding: 10px; border-radius: 10px; background: var(--t-toolbar); border: 1px solid var(--t-border); }
+.mag-note { font-size: 12.5px; color: color-mix(in srgb, var(--page-text) 60%, transparent); max-width: 380px; }
+.fill-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; margin-top: 14px; color: var(--muted-fg); }
+/* Trim callout — a highlighted, hard-to-miss action tied to the fill warning. */
+.trim-callout {
+	display: flex; align-items: center; gap: 13px; margin-top: 12px; padding: 13px 15px; border-radius: 12px;
+	border: 1.5px solid color-mix(in oklab, var(--primary) 55%, var(--border));
+	background: color-mix(in oklab, var(--primary) 9%, var(--surface));
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 10%, transparent);
+}
+.trim-ico { flex: none; width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--primary-fg); background: var(--primary); }
+.trim-text { flex: 1; min-width: 0; }
+.trim-text strong { font-size: 13.5px; }
+.trim-text p { font-size: 12.5px; color: var(--muted-fg); margin-top: 1px; }
+/* iOS-style switch so the control reads as an actionable toggle, not a stray checkbox. */
+.switch { flex: none; position: relative; display: inline-flex; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch-track { width: 42px; height: 24px; border-radius: 999px; background: color-mix(in oklab, var(--muted-fg) 45%, transparent); transition: background .18s; display: inline-flex; align-items: center; padding: 0 3px; }
+.switch-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform .18s; }
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--primary); outline-offset: 2px; }
+.note-warn {
+	font-size: 12.5px; line-height: 1.45; padding: 9px 12px; border-radius: 8px; margin-bottom: 12px;
+	background: color-mix(in srgb, #f59e0b 14%, transparent); color: #b45309;
+}
+html.dark .note-warn { color: #fbbf24; }
+
+/* Export */
+.export-row { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 13px; }
+button.btn {
+	font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+	border: 1px solid var(--card-border); background: transparent; color: inherit;
+}
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.btn:hover { filter: brightness(1.06); }
+pre.snippet { background: color-mix(in srgb, var(--page-text) 7%, transparent); border-radius: 8px; padding: 12px; font-size: 12px; overflow-x: auto; }
+.next-steps {
+	border-color: color-mix(in srgb, var(--accent) 40%, var(--card-border));
+	background:
+		linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+		var(--card);
+}
+.next-head { display: flex; align-items: center; gap: 13px; margin-bottom: 16px; }
+.next-badge {
+	flex: none; width: 40px; height: 40px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center;
+	color: var(--primary-fg); background: linear-gradient(135deg, var(--primary), color-mix(in oklab, var(--primary) 68%, #000));
+	box-shadow: 0 4px 12px color-mix(in oklab, var(--primary) 35%, transparent);
+}
+.next-head h2 { font-size: 16px; margin: 0; }
+.next-sub { font-size: 12.5px; color: color-mix(in srgb, var(--page-text) 62%, transparent); margin-top: 2px; }
+.next-grid { display: grid; gap: 9px; }
+.next-item {
+	display: flex; gap: 11px; align-items: flex-start; padding: 11px 13px; border-radius: 10px;
+	background: color-mix(in srgb, var(--page-text) 4%, transparent);
+	border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+	transition: border-color .15s, background .15s;
+}
+.next-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.next-ico { flex: none; margin-top: 1px; color: var(--accent); display: inline-flex; }
+.next-body { display: grid; gap: 3px; min-width: 0; }
+.next-body code { font-size: 12.5px; background: color-mix(in srgb, var(--page-text) 8%, transparent); border-radius: 5px; padding: 2px 7px; justify-self: start; }
+.next-body a { font-size: 13.5px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.next-body a:hover { text-decoration: underline; }
+.next-body p { font-size: 12.5px; color: color-mix(in srgb, var(--page-text) 68%, transparent); }
+/* Recommended prompt — assembled from the analysis findings. */
+.prompt-issues { margin: 0 0 12px 18px; font-size: 12.5px; color: var(--muted-fg); display: grid; gap: 4px; }
+pre.snippet.wrap { white-space: pre-wrap; word-break: break-word; }
+.foot { text-align: center; font-size: 12px; color: color-mix(in srgb, var(--page-text) 45%, transparent); }
+.foot a { color: var(--accent); }
+.raster-note { font-size: 12.5px; color: #b45309; margin-bottom: 10px; }
+label.toggle { display: inline-flex; gap: 7px; align-items: center; font-size: 13px; cursor: pointer; margin-left: auto; }
+.themes-head { display: flex; align-items: center; }
+</style>
+</head>
+<body>
+<header class="topbar">
+	<span class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="28" height="28" aria-hidden="true"><g transform="translate(200, 200) scale(1.1) translate(-219, -169)"><path fill="currentColor" fill-rule="evenodd" d="M 43 29.961 C 43 32.246, 47.125 48.247, 49.888 56.680 C 55.762 74.610, 62.198 83.944, 72.096 88.890 C 78.191 91.936, 78.614 92, 92.660 92 L 107 92 106.994 96.250 C 106.991 98.588, 106.697 104.233, 106.342 108.795 L 105.697 117.091 92.098 116.996 C 84.619 116.943, 77.938 116.923, 77.250 116.950 C 76.300 116.988, 76 121.193, 76 134.500 L 76 152 90.487 152 L 104.974 152 104.449 159.250 C 104.161 163.237, 103.503 174.150, 102.987 183.500 C 102.472 192.850, 101.387 211.300, 100.578 224.500 C 98.475 258.794, 96.671 304.700, 97.356 306.487 C 97.875 307.839, 111.424 307.980, 219.220 307.754 L 340.500 307.500 340.255 287.609 C 340.096 274.661, 339.617 267.243, 338.883 266.359 C 338.004 265.299, 333.491 265, 318.397 265 L 299.038 265 298.411 267.500 C 298.066 268.875, 298.066 271.125, 298.411 272.500 L 299.038 275 222.519 275 L 146 275 146 213.500 L 146 152 218.300 152 C 273.200 152, 290.889 152.289, 291.800 153.200 C 293.565 154.965, 293.269 163.776, 291.257 169.391 C 289.026 175.614, 283.255 182.192, 277.770 184.762 C 265.607 190.461, 266.274 190.383, 224.500 190.961 L 185.500 191.500 185.229 211.226 L 184.958 230.951 187.533 231.598 C 191.687 232.640, 262.673 231.320, 272.308 230.021 C 306.918 225.355, 331.983 202.503, 332.006 175.593 C 332.009 171.692, 332.300 164.799, 332.652 160.277 L 333.292 152.053 347.396 151.777 L 361.500 151.500 361.500 134.500 L 361.500 117.500 347.219 117.222 L 332.939 116.945 333.219 104.722 L 333.500 92.500 347.500 91.947 C 357.308 91.560, 362.626 90.900, 365.261 89.744 C 371.234 87.122, 379.834 78.279, 383.489 71 C 388.795 60.434, 397.405 31.072, 395.699 29.365 C 395.464 29.130, 391.723 30.083, 387.386 31.483 C 379.737 33.952, 356.811 38.101, 340.500 39.969 C 320.691 42.238, 283.099 43.185, 214.975 43.131 C 145.730 43.077, 109.789 42.106, 94.500 39.878 C 90.650 39.316, 84.575 38.430, 81 37.907 C 65.459 35.634, 56.790 33.817, 50.373 31.490 C 42.436 28.611, 43 28.728, 43 29.961 M 146.673 92.660 C 146.303 93.030, 146 98.658, 146 105.167 L 146 117 219.531 117 L 293.062 117 292.781 104.750 L 292.500 92.500 219.923 92.244 C 180.006 92.102, 147.043 92.290, 146.673 92.660"/></g></svg></span>
+	<span class="brand">extenshi</span>
+	<span class="sep">·</span>
+	<span class="subtitle">Icon preview</span>
+	<span class="spacer"></span>
+	<button class="tg" id="theme-toggle" type="button" aria-label="Toggle colour theme"></button>
+</header>
+<main>
+	<header class="page-head">
+		<div class="brand">Extenshi · Icon preview</div>
+		<h1>Tab Tidy</h1>
+		<p class="meta">tab-tidy.svg · generated 2026-07-19 09:41 UTC · @extenshi/cli v0.8.1</p>
+	</header>
+
+	<section class="card">
+		<div class="themes-head">
+			<h2>Palette<span class="hint">how the toolbar around your icon is colored</span></h2>
+			<label class="toggle"><input type="checkbox" id="hl-toggle"> highlight my icon</label>
+		</div>
+		<div class="chips" id="theme-chips"></div>
+		<label class="custom">Custom toolbar color <input type="color" id="custom-color" value="#8b5cf6"></label>
+	</section>
+
+	<div id="mockups">
+		<section class="browser chrome">
+	<h3>Chrome</h3>
+	<div class="bwin">
+		<div class="tabs">
+			<span class="lights"><i class="l r"></i><i class="l y"></i><i class="l g"></i></span>
+			<div class="tab active"><span class="fav"></span><span class="tab-title">New Tab</span><span class="tab-x">×</span></div>
+			<div class="tab"><span class="fav"></span><span class="tab-title">Docs — Extenshi</span></div>
+			<span class="newtab">+</span>
+		</div>
+		<div class="toolbar">
+			<span class="navbtn">←</span><span class="navbtn dim">→</span><span class="navbtn">⟳</span>
+			<div class="urlbar"><span class="lock"><svg viewBox="0 0 12 12" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M3.5 5V3.8a2.5 2.5 0 0 1 5 0V5h.4c.6 0 1.1.5 1.1 1.1v3.8c0 .6-.5 1.1-1.1 1.1H3.1c-.6 0-1.1-.5-1.1-1.1V6.1C2 5.5 2.5 5 3.1 5h.4zm1.2 0h2.6V3.8a1.3 1.3 0 0 0-2.6 0V5z"/></svg></span><span class="url">extenshi.io</span></div>
+			<div class="pins"><span class="pin"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%223.5%22%20fill%3D%22%239aa0a6%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="16" height="16"></span>
+<span class="pin"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227%22%20fill%3D%22%2380868b%22%2F%3E%3Cpath%20d%3D%22M8.8%203.5%205.5%208.6h2.2l-.6%203.9%203.4-5.1H8.3l.5-3.9z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="16" height="16"></span>
+<span class="pin yours" title="Tab Tidy"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" alt="Tab Tidy" width="16" height="16"></span>
+<span class="pin puzzle" title="Extensions"><svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8.5 3.5a1.75 1.75 0 1 1 3.5 0V5h2.25c.69 0 1.25.56 1.25 1.25V8.5h-1a1.75 1.75 0 1 0 0 3.5h1v2.25c0 .69-.56 1.25-1.25 1.25H12v-1a1.75 1.75 0 1 0-3.5 0v1H6.25C5.56 15.5 5 14.94 5 14.25V12H4a1.75 1.75 0 1 1 0-3.5h1V6.25C5 5.56 5.56 5 6.25 5H8.5V3.5z"/></svg></span></div>
+			<span class="avatar"></span>
+			<span class="menu">⋮</span>
+		</div>
+		<div class="pagearea"></div>
+	</div>
+	<div class="extmenu">
+	<div class="extmenu-title">Extensions</div>
+	<div class="extmenu-row you">
+		<img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" alt="" width="20" height="20">
+		<span class="extmenu-name">Tab Tidy</span>
+		<span class="extmenu-pin"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M9.5 1.5 14 6l-2.7.7-2 2V13l-1.5 1.5-2-3.5L2.3 7.5 3.8 6h4.3l2-2L9.5 1.5z"/></svg></span>
+	</div>
+	<div class="extmenu-row">
+		<img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%223.5%22%20fill%3D%22%239aa0a6%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="20" height="20">
+		<span class="extmenu-name">Grid Notes</span>
+		<span class="extmenu-pin dim"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M9.5 1.5 14 6l-2.7.7-2 2V13l-1.5 1.5-2-3.5L2.3 7.5 3.8 6h4.3l2-2L9.5 1.5z"/></svg></span>
+	</div>
+	<div class="extmenu-row">
+		<img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227%22%20fill%3D%22%2380868b%22%2F%3E%3Cpath%20d%3D%22M8.8%203.5%205.5%208.6h2.2l-.6%203.9%203.4-5.1H8.3l.5-3.9z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="20" height="20">
+		<span class="extmenu-name">Quick Actions</span>
+		<span class="extmenu-pin dim"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M9.5 1.5 14 6l-2.7.7-2 2V13l-1.5 1.5-2-3.5L2.3 7.5 3.8 6h4.3l2-2L9.5 1.5z"/></svg></span>
+	</div>
+</div>
+</section>
+		<section class="browser firefox">
+	<h3>Firefox</h3>
+	<div class="bwin">
+		<div class="tabs">
+			<span class="lights"><i class="l r"></i><i class="l y"></i><i class="l g"></i></span>
+			<span class="strip-btn" title="Firefox View"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.5" y="3.5" width="13" height="10" rx="2"/><path d="M1.5 6.5h13"/></svg></span>
+			<div class="tab active"><span class="fav"></span><span class="tab-title">New Tab</span><span class="tab-x">×</span></div>
+			<span class="newtab">+</span>
+			<span class="strip-spacer"></span>
+			<span class="strip-btn chevron" title="List all tabs">⌄</span>
+		</div>
+		<div class="toolbar">
+			<span class="navbtn"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></span>
+			<span class="navbtn">←</span><span class="navbtn dim">→</span><span class="navbtn">⟳</span>
+			<div class="urlbar"><span class="lock"><svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="m9 9 3.4 3.4"/></svg></span><span class="url placeholder">Search or enter address</span></div>
+			<div class="pins"><span class="pin"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%223.5%22%20fill%3D%22%239aa0a6%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="16" height="16"></span>
+<span class="pin"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227%22%20fill%3D%22%2380868b%22%2F%3E%3Cpath%20d%3D%22M8.8%203.5%205.5%208.6h2.2l-.6%203.9%203.4-5.1H8.3l.5-3.9z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="16" height="16"></span>
+<span class="pin yours" title="Tab Tidy"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" alt="Tab Tidy" width="16" height="16"></span>
+<span class="pin puzzle" title="Extensions"><svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8.5 3.5a1.75 1.75 0 1 1 3.5 0V5h2.25c.69 0 1.25.56 1.25 1.25V8.5h-1a1.75 1.75 0 1 0 0 3.5h1v2.25c0 .69-.56 1.25-1.25 1.25H12v-1a1.75 1.75 0 1 0-3.5 0v1H6.25C5.56 15.5 5 14.94 5 14.25V12H4a1.75 1.75 0 1 1 0-3.5h1V6.25C5 5.56 5.56 5 6.25 5H8.5V3.5z"/></svg></span></div>
+			<span class="menu">☰</span>
+		</div>
+		<div class="pagearea"></div>
+	</div>
+	
+</section>
+		<section class="browser edge">
+	<h3>Edge</h3>
+	<div class="bwin">
+		<div class="tabs">
+			<span class="lights"><i class="l r"></i><i class="l y"></i><i class="l g"></i></span>
+			<div class="tab active"><span class="fav"></span><span class="tab-title">New Tab</span><span class="tab-x">×</span></div>
+			<div class="tab"><span class="fav"></span><span class="tab-title">Docs — Extenshi</span></div>
+			<span class="newtab">+</span>
+		</div>
+		<div class="toolbar">
+			<span class="navbtn">←</span><span class="navbtn dim">→</span><span class="navbtn">⟳</span>
+			<div class="urlbar"><span class="lock"><svg viewBox="0 0 12 12" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M3.5 5V3.8a2.5 2.5 0 0 1 5 0V5h.4c.6 0 1.1.5 1.1 1.1v3.8c0 .6-.5 1.1-1.1 1.1H3.1c-.6 0-1.1-.5-1.1-1.1V6.1C2 5.5 2.5 5 3.1 5h.4zm1.2 0h2.6V3.8a1.3 1.3 0 0 0-2.6 0V5z"/></svg></span><span class="url">extenshi.io</span></div>
+			<div class="pins"><span class="pin"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%223.5%22%20fill%3D%22%239aa0a6%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="16" height="16"></span>
+<span class="pin"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227%22%20fill%3D%22%2380868b%22%2F%3E%3Cpath%20d%3D%22M8.8%203.5%205.5%208.6h2.2l-.6%203.9%203.4-5.1H8.3l.5-3.9z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" alt="" width="16" height="16"></span>
+<span class="pin yours" title="Tab Tidy"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" alt="Tab Tidy" width="16" height="16"></span>
+<span class="pin puzzle" title="Extensions"><svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8.5 3.5a1.75 1.75 0 1 1 3.5 0V5h2.25c.69 0 1.25.56 1.25 1.25V8.5h-1a1.75 1.75 0 1 0 0 3.5h1v2.25c0 .69-.56 1.25-1.25 1.25H12v-1a1.75 1.75 0 1 0-3.5 0v1H6.25C5.56 15.5 5 14.94 5 14.25V12H4a1.75 1.75 0 1 1 0-3.5h1V6.25C5 5.56 5.56 5 6.25 5H8.5V3.5z"/></svg></span></div>
+			<span class="avatar"></span>
+			<span class="menu">…</span>
+		</div>
+		<div class="pagearea"></div>
+	</div>
+	
+</section>
+	</div>
+
+	<section class="card">
+		<h2>Contrast across palettes<span class="hint">does the icon survive every background?</span></h2>
+		<p class="note-warn" id="midgray-note" hidden>△ Low-saturation mid-gray icon: it clears the contrast ratio on every palette, yet stands out on none of them — mid-gray reads as "part of the toolbar" everywhere. Consider a saturated brand color, or add a darker/lighter outline or backdrop shape.</p>
+		<div id="contrast-grid"></div>
+	</section>
+
+	<section class="card">
+		<h2>Store sizes</h2>
+		
+		<div class="size-flex">
+<div class="size-cell">
+	<span class="checker"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" width="16" height="16" alt="16px preview"></span>
+	<span>16px</span>
+</div>
+<div class="size-cell">
+	<span class="checker"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" width="32" height="32" alt="32px preview"></span>
+	<span>32px</span>
+</div>
+<div class="size-cell">
+	<span class="checker"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" width="48" height="48" alt="48px preview"></span>
+	<span>48px</span>
+</div>
+<div class="size-cell">
+	<span class="checker"><img class="icon-self" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=" width="128" height="128" alt="128px preview"></span>
+	<span>128px</span>
+</div>
+		</div>
+		<p class="fill-note" id="fill-note"></p>
+		<div class="trim-callout" id="trim-row" hidden>
+			<span class="trim-ico"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg></span>
+			<div class="trim-text">
+				<strong>Trim empty margins</strong>
+				<p>Rescale the artwork edge-to-edge — applied to every preview, the size matrix, and all exports.</p>
+			</div>
+			<label class="switch" title="Toggle edge-to-edge trim">
+				<input type="checkbox" id="trim-toggle">
+				<span class="switch-track"><span class="switch-thumb"></span></span>
+			</label>
+		</div>
+		<div class="mag-wrap">
+			<span class="mag-box" id="mag-box"><canvas id="mag" width="16" height="16"></canvas></span>
+			<p class="mag-note">The 16&nbsp;px render at 8× magnification on the selected toolbar color — this is the version most users will actually see. Check that the silhouette stays readable and edges don't dissolve.</p>
+		</div>
+	</section>
+
+	<section class="card" id="prompt-card" hidden>
+		<h2>Recommended prompt<span class="hint">paste into whatever draws your icon to fix the findings</span></h2>
+		<ul class="prompt-issues" id="prompt-issues"></ul>
+		<div class="export-row">
+			<button class="btn primary" type="button" id="prompt-copy-btn">Copy prompt</button>
+		</div>
+		<pre class="snippet wrap" id="prompt-text"></pre>
+	</section>
+
+	<section class="card">
+		<h2>Export</h2>
+		<div class="export-row">
+			<button class="btn" type="button" id="png-16">PNG 16</button>
+			<button class="btn" type="button" id="png-32">PNG 32</button>
+			<button class="btn" type="button" id="png-48">PNG 48</button>
+			<button class="btn" type="button" id="png-128">PNG 128</button>
+			<button class="btn primary" type="button" id="zip-btn">Download ZIP (PNG set + SVG + manifest)</button>
+			<button class="btn" type="button" id="copy-btn">Copy manifest snippet</button>
+		</div>
+		<pre class="snippet"><code>{
+	&quot;icons&quot;: {
+		&quot;16&quot;: &quot;icons/16.png&quot;,
+		&quot;32&quot;: &quot;icons/32.png&quot;,
+		&quot;48&quot;: &quot;icons/48.png&quot;,
+		&quot;128&quot;: &quot;icons/128.png&quot;
+	},
+	&quot;action&quot;: {
+		&quot;default_icon&quot;: {
+			&quot;16&quot;: &quot;icons/16.png&quot;,
+			&quot;32&quot;: &quot;icons/32.png&quot;
+		}
+	}
+}</code></pre>
+	</section>
+
+	<section class="card next-steps">
+		<div class="next-head">
+			<span class="next-badge"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3.4 1.7 5 4.8 5 8.5 0 1.4-.3 2.8-.8 4l-2 3.5H9.8l-2-3.5A9 9 0 0 1 7 11c0-3.7 1.6-6.8 5-8.5z"/><circle cx="12" cy="9.5" r="1.9"/><path d="M8 18l-2 3.5M16 18l2 3.5"/></svg></span>
+			<div>
+				<h2>Ship the rest with Extenshi</h2>
+				<p class="next-sub">The same free CLI takes you from icon to a clean store submission.</p>
+			</div>
+		</div>
+		<div class="next-grid">
+			<div class="next-item">
+				<span class="next-ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 4.5 6.5v5c0 4.4 3 8 7.5 9.5 4.5-1.5 7.5-5.1 7.5-9.5v-5L12 3.5z"/><path d="M9 11.5l2 2 4-4.5"/></svg></span>
+				<div class="next-body">
+					<code>npx @extenshi/cli review-risk dist.zip</code>
+					<p>Predict the Chrome Web Store review outcome before you submit — offline, no account.</p>
+				</div>
+			</div>
+			<div class="next-item">
+				<span class="next-ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20.5 20.5 16 16"/></svg></span>
+				<div class="next-body">
+					<code>npx @extenshi/cli scan dist.zip</code>
+					<p>Pre-publish security scan of the built artifact, with a free allowance.</p>
+				</div>
+			</div>
+			<div class="next-item">
+				<span class="next-ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7L12 2.5z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg></span>
+				<div class="next-body">
+					<a href="https://catalog.extenshi.io/developers?utm_source=extenshi-cli&utm_medium=icon-preview&utm_campaign=developer-tools#tools">The full developer toolbox →</a>
+					<p>Manifest generator, privacy-policy generator, and more — free at extenshi.io.</p>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<p class="foot">Generated locally by <a href="https://extenshi.io?utm_source=extenshi-cli&utm_medium=icon-preview&utm_campaign=cli-footer">@extenshi/cli</a> — no data left your machine.</p>
+</main>
+<script>window.__ICON_PREVIEW__ = {"name":"Tab Tidy","dataUrl":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ij4KCTxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIyMiIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiM0ZjQ2ZTUiLz4KCTxyZWN0IHg9IjQuNSIgeT0iNiIgd2lkdGg9IjE1IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIvPgoJPHJlY3QgeD0iNC41IiB5PSIxMS4zIiB3aWR0aD0iMTUiIGhlaWdodD0iMy40IiByeD0iMS43IiBmaWxsPSIjZmZmZmZmIi8+Cgk8cmVjdCB4PSI0LjUiIHk9IjE2LjYiIHdpZHRoPSI5IiBoZWlnaHQ9IjMuNCIgcng9IjEuNyIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43NSIvPgo8L3N2Zz4=","isSvg":true,"svgSource":"\u003csvg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\">\n\t\u003crect x=\"1\" y=\"1\" width=\"22\" height=\"22\" rx=\"5\" fill=\"#4f46e5\"/>\n\t\u003crect x=\"4.5\" y=\"6\" width=\"15\" height=\"3.4\" rx=\"1.7\" fill=\"#ffffff\"/>\n\t\u003crect x=\"4.5\" y=\"11.3\" width=\"15\" height=\"3.4\" rx=\"1.7\" fill=\"#ffffff\"/>\n\t\u003crect x=\"4.5\" y=\"16.6\" width=\"9\" height=\"3.4\" rx=\"1.7\" fill=\"#ffffff\" opacity=\"0.75\"/>\n\u003c/svg>","manifestSnippet":"{\n\t\"icons\": {\n\t\t\"16\": \"icons/16.png\",\n\t\t\"32\": \"icons/32.png\",\n\t\t\"48\": \"icons/48.png\",\n\t\t\"128\": \"icons/128.png\"\n\t},\n\t\"action\": {\n\t\t\"default_icon\": {\n\t\t\t\"16\": \"icons/16.png\",\n\t\t\t\"32\": \"icons/32.png\"\n\t\t}\n\t}\n}","safeName":"tab-tidy","neighbors":["data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2214%22%20height%3D%2214%22%20rx%3D%223.5%22%20fill%3D%22%239aa0a6%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%225.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%225.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%221.6%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E","data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227%22%20fill%3D%22%2380868b%22%2F%3E%3Cpath%20d%3D%22M8.8%203.5%205.5%208.6h2.2l-.6%203.9%203.4-5.1H8.3l.5-3.9z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E"]};</script>
+<script>
+'use strict';
+var CFG = window.__ICON_PREVIEW__;
+
+// ---- palettes ----
+var THEMES = [
+	{ id: 'light',  label: 'Light',       toolbar: '#ffffff', tabstrip: '#dfe1e5' },
+	{ id: 'tinted', label: 'Light tinted',toolbar: '#e9eef6', tabstrip: '#d4dceb' },
+	{ id: 'dark',   label: 'Dark',        toolbar: '#35363a', tabstrip: '#202124' },
+	{ id: 'black',  label: 'Black',       toolbar: '#1b1b1f', tabstrip: '#0e0e10' },
+	{ id: 'ocean',  label: 'Saturated',   toolbar: '#174ea6', tabstrip: '#0d3a80' }
+];
+
+function hexToRgb(hex) {
+	var h = hex.replace('#', '');
+	if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+	var n = parseInt(h, 16);
+	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToHex(rgb) {
+	return '#' + rgb.map(function (v) {
+		var s = Math.max(0, Math.min(255, Math.round(v))).toString(16);
+		return s.length === 1 ? '0' + s : s;
+	}).join('');
+}
+function mix(a, b, t) {
+	return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+// WCAG relative luminance
+function relLum(rgb) {
+	var c = rgb.map(function (v) {
+		v /= 255;
+		return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+	});
+	return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function contrastRatio(a, b) {
+	var l1 = relLum(a), l2 = relLum(b);
+	var hi = Math.max(l1, l2), lo = Math.min(l1, l2);
+	return (hi + 0.05) / (lo + 0.05);
+}
+function deriveTheme(toolbarHex) {
+	var t = hexToRgb(toolbarHex);
+	var darkText = relLum(t) > 0.4;
+	var text = darkText ? [32, 33, 36] : [235, 237, 240];
+	return {
+		id: 'custom', label: 'Custom',
+		toolbar: toolbarHex,
+		tabstrip: rgbToHex(mix(t, darkText ? [0, 0, 0] : [0, 0, 0], darkText ? 0.14 : 0.4)),
+		text: rgbToHex(text),
+		muted: rgbToHex(mix(t, text, 0.62)),
+		url: rgbToHex(mix(t, text, darkText ? 0.06 : 0.1))
+	};
+}
+function materialize(theme) {
+	if (theme.text) return theme;
+	var full = deriveTheme(theme.toolbar);
+	return {
+		id: theme.id, label: theme.label,
+		toolbar: theme.toolbar, tabstrip: theme.tabstrip,
+		text: full.text, muted: full.muted, url: full.url
+	};
+}
+
+var currentTheme = materialize(THEMES[0]);
+function applyTheme(theme) {
+	currentTheme = materialize(theme);
+	var r = document.documentElement.style;
+	r.setProperty('--t-toolbar', currentTheme.toolbar);
+	r.setProperty('--t-tabstrip', currentTheme.tabstrip);
+	r.setProperty('--t-url', currentTheme.url);
+	r.setProperty('--t-text', currentTheme.text);
+	r.setProperty('--t-muted', currentTheme.muted);
+	r.setProperty('--t-border', relLum(hexToRgb(currentTheme.toolbar)) > 0.4 ? 'rgba(0,0,0,.14)' : 'rgba(255,255,255,.14)');
+	document.querySelectorAll('.chip[data-theme]').forEach(function (c) {
+		c.classList.toggle('active', c.getAttribute('data-theme') === currentTheme.id);
+	});
+	drawMagnifier();
+}
+
+// ---- icon raster helpers (SVG/PNG → canvas) ----
+var iconImg = null;
+function loadIcon() {
+	return new Promise(function (resolve, reject) {
+		if (iconImg) { resolve(iconImg); return; }
+		var img = new Image();
+		img.onload = function () { iconImg = img; resolve(img); };
+		img.onerror = function () { reject(new Error('Failed to load the icon image')); };
+		img.src = CFG.dataUrl;
+	});
+}
+// ---- trim-to-edges (canvas-usage) state ----
+// When the artwork leaves wide transparent margins inside its viewBox, the
+// 16px toolbar render wastes those pixels. "trimmed" holds an edge-to-edge
+// variant (vector viewBox re-crop for SVG, canvas crop for PNG) that the trim
+// toggle swaps into every preview AND every export.
+var trimOn = false;
+var trimmed = null; // { svgSource?, displayUrl, img? }
+
+function activeSvgSource() {
+	return trimOn && trimmed && trimmed.svgSource ? trimmed.svgSource : CFG.svgSource;
+}
+function displayIconUrl() {
+	return trimOn && trimmed ? trimmed.displayUrl : CFG.dataUrl;
+}
+
+function parseSvg(source) {
+	var doc = new DOMParser().parseFromString(source, 'image/svg+xml');
+	var el = doc.querySelector('svg');
+	if (el && !el.getAttribute('viewBox')) {
+		var w = parseFloat(el.getAttribute('width') || '') || 24;
+		var h = parseFloat(el.getAttribute('height') || '') || 24;
+		el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+	}
+	return el;
+}
+// For SVG sources, re-encode with explicit pixel dimensions so every browser
+// rasterizes at the exact target size (Firefox refuses dimension-less SVGs).
+function sizedSvgUrl(size) {
+	var el = parseSvg(activeSvgSource());
+	if (!el) return CFG.dataUrl;
+	el.setAttribute('width', String(size));
+	el.setAttribute('height', String(size));
+	var xml = new XMLSerializer().serializeToString(el);
+	return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+}
+function renderToCanvas(size) {
+	return new Promise(function (resolve, reject) {
+		var finish = function (img) {
+			var canvas = document.createElement('canvas');
+			canvas.width = size; canvas.height = size;
+			var ctx = canvas.getContext('2d');
+			ctx.imageSmoothingEnabled = true;
+			ctx.imageSmoothingQuality = 'high';
+			ctx.drawImage(img, 0, 0, size, size);
+			resolve(canvas);
+		};
+		if (CFG.isSvg && CFG.svgSource) {
+			var img = new Image();
+			img.onload = function () { finish(img); };
+			img.onerror = function () { reject(new Error('SVG rasterization failed')); };
+			img.src = sizedSvgUrl(size);
+		} else if (trimOn && trimmed && trimmed.img) {
+			finish(trimmed.img);
+		} else {
+			loadIcon().then(finish, reject);
+		}
+	});
+}
+function canvasToBlob(canvas) {
+	return new Promise(function (resolve, reject) {
+		canvas.toBlob(function (b) { b ? resolve(b) : reject(new Error('canvas.toBlob returned null')); }, 'image/png');
+	});
+}
+function downloadBlob(name, blob) {
+	var url = URL.createObjectURL(blob);
+	var a = document.createElement('a');
+	a.href = url; a.download = name;
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+	setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+}
+
+// ---- icon analysis ----
+// One 128px pass over the UNTRIMMED source: alpha-weighted average color,
+// coverage, average chroma (for the mid-gray heuristic), and the opaque-pixel
+// bounding box (for the canvas-usage metric + trim).
+var ANALYZE_SIZE = 128;
+var iconStats = null;
+function analyzeIcon() {
+	return renderToCanvas(ANALYZE_SIZE).then(function (canvas) {
+		var n = ANALYZE_SIZE;
+		var d = canvas.getContext('2d').getImageData(0, 0, n, n).data;
+		var r = 0, g = 0, b = 0, wsum = 0, opaque = 0, chroma = 0;
+		var x0 = n, y0 = n, x1 = -1, y1 = -1;
+		for (var y = 0; y < n; y++) {
+			for (var x = 0; x < n; x++) {
+				var i = (y * n + x) * 4;
+				var a = d[i + 3] / 255;
+				if (a > 0.05) {
+					opaque++;
+					if (x < x0) x0 = x;
+					if (x > x1) x1 = x;
+					if (y < y0) y0 = y;
+					if (y > y1) y1 = y;
+				}
+				r += d[i] * a; g += d[i + 1] * a; b += d[i + 2] * a; wsum += a;
+				chroma += (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) * a;
+			}
+		}
+		if (wsum > 0 && x1 >= 0) {
+			iconStats = {
+				avg: [r / wsum, g / wsum, b / wsum],
+				coverage: opaque / (n * n),
+				chroma: chroma / wsum,
+				bbox: { x0: x0, y0: y0, x1: x1, y1: y1 },
+				fill: Math.max(x1 - x0 + 1, y1 - y0 + 1) / n
+			};
+		} else {
+			iconStats = { avg: [128, 128, 128], coverage: 0, chroma: 0, bbox: null, fill: 0 };
+		}
+		return iconStats;
+	});
+}
+function contrastBadge(theme) {
+	var ratio = contrastRatio(iconStats.avg, hexToRgb(theme.toolbar));
+	if (ratio < 1.45) return { cls: 'bad', label: '⚠ melts into background', ratio: ratio };
+	if (ratio < 2.2) return { cls: 'weak', label: '△ low contrast', ratio: ratio };
+	return { cls: 'ok', label: '✓ reads well', ratio: ratio };
+}
+// Mid-gray heuristic: a desaturated icon whose luminance sits in the middle
+// clears the WCAG ratio against EVERY toolbar (≈3–4:1 everywhere) yet stands
+// out on none of them — the ratio badges alone can't catch that.
+function isMidGray() {
+	if (!iconStats || iconStats.coverage < 0.04) return false;
+	var lum = relLum(iconStats.avg);
+	return iconStats.chroma < 30 && lum > 0.1 && lum < 0.62;
+}
+
+// ---- canvas-usage metric + trim toggle ----
+function computeTrimmedVariant() {
+	if (!iconStats || !iconStats.bbox || iconStats.fill >= 0.98) { trimmed = null; return Promise.resolve(); }
+	var n = ANALYZE_SIZE;
+	var bb = iconStats.bbox;
+	var pad = 0.02; // 2% breathing room so strokes don't touch the very edge
+	if (CFG.isSvg && CFG.svgSource) {
+		var el = parseSvg(CFG.svgSource);
+		if (!el) { trimmed = null; return Promise.resolve(); }
+		var vb = (el.getAttribute('viewBox') || '0 0 24 24').trim().split(/[\s,]+/).map(Number);
+		var bw = ((bb.x1 - bb.x0 + 1) / n) * vb[2];
+		var bh = ((bb.y1 - bb.y0 + 1) / n) * vb[3];
+		var cx = vb[0] + ((bb.x0 + bb.x1 + 1) / 2 / n) * vb[2];
+		var cy = vb[1] + ((bb.y0 + bb.y1 + 1) / 2 / n) * vb[3];
+		var side = Math.max(bw, bh) * (1 + pad * 2);
+		el.setAttribute('viewBox', (cx - side / 2) + ' ' + (cy - side / 2) + ' ' + side + ' ' + side);
+		el.removeAttribute('width');
+		el.removeAttribute('height');
+		var xml = new XMLSerializer().serializeToString(el);
+		trimmed = { svgSource: xml, displayUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml) };
+		return Promise.resolve();
+	}
+	// PNG: crop the natural-resolution image around the (scaled) bounding box.
+	return loadIcon().then(function (img) {
+		var nw = img.naturalWidth || n, nh = img.naturalHeight || n;
+		var sx0 = Math.floor((bb.x0 / n) * nw), sx1 = Math.ceil(((bb.x1 + 1) / n) * nw);
+		var sy0 = Math.floor((bb.y0 / n) * nh), sy1 = Math.ceil(((bb.y1 + 1) / n) * nh);
+		var bwPx = sx1 - sx0, bhPx = sy1 - sy0;
+		var side = Math.ceil(Math.max(bwPx, bhPx) * (1 + pad * 2));
+		var canvas = document.createElement('canvas');
+		canvas.width = side; canvas.height = side;
+		var ctx = canvas.getContext('2d');
+		ctx.drawImage(img, sx0, sy0, bwPx, bhPx, Math.round((side - bwPx) / 2), Math.round((side - bhPx) / 2), bwPx, bhPx);
+		var url = canvas.toDataURL('image/png');
+		return new Promise(function (resolve) {
+			var timg = new Image();
+			timg.onload = function () { trimmed = { displayUrl: url, img: timg }; resolve(); };
+			timg.onerror = function () { trimmed = null; resolve(); };
+			timg.src = url;
+		});
+	});
+}
+
+function refreshIconEverywhere() {
+	var url = displayIconUrl();
+	document.querySelectorAll('img.icon-self').forEach(function (img) { img.src = url; });
+	drawMagnifier();
+	renderContrastGrid();
+}
+
+function renderFillNote() {
+	var note = document.getElementById('fill-note');
+	if (!note || !iconStats) return;
+	var pct = Math.round(iconStats.fill * 100);
+	note.textContent = '';
+	var badge = document.createElement('span');
+	var ok = iconStats.fill >= 0.88;
+	badge.className = 'badge ' + (ok ? 'ok' : 'weak');
+	badge.textContent = ok ? '✓ fills the canvas well' : '△ scale the artwork to the edges';
+	var text = document.createElement('span');
+	text.textContent = 'Artwork fills ' + pct + '% of its canvas — the rest is transparent margin that shrinks the icon in the toolbar. ';
+	note.appendChild(text);
+	note.appendChild(badge);
+	var trimRow = document.getElementById('trim-row');
+	if (trimRow && iconStats.fill < 0.98 && iconStats.fill > 0) trimRow.hidden = false;
+}
+
+// ---- contrast grid ----
+function pinStrip(theme) {
+	var wrap = document.createElement('div');
+	wrap.className = 'cg-strip';
+	wrap.style.background = theme.toolbar;
+	var srcs = [CFG.neighbors[0], CFG.neighbors[1], displayIconUrl()];
+	srcs.forEach(function (src, i) {
+		var pin = document.createElement('span');
+		pin.className = 'pin' + (i === 2 ? ' yours' : '');
+		var img = document.createElement('img');
+		img.src = src; img.width = 16; img.height = 16; img.alt = '';
+		pin.appendChild(img);
+		wrap.appendChild(pin);
+	});
+	return wrap;
+}
+function renderContrastGrid() {
+	var grid = document.getElementById('contrast-grid');
+	grid.textContent = '';
+	var themes = THEMES.map(materialize);
+	if (currentTheme.id === 'custom') themes.push(currentTheme);
+	themes.forEach(function (theme) {
+		var cell = document.createElement('div');
+		cell.className = 'cg-cell';
+		cell.appendChild(pinStrip(theme));
+		var meta = document.createElement('div');
+		meta.className = 'cg-meta';
+		var name = document.createElement('span');
+		name.textContent = theme.label;
+		var badge = document.createElement('span');
+		var v = contrastBadge(theme);
+		badge.className = 'badge ' + v.cls;
+		badge.title = 'contrast ratio ' + v.ratio.toFixed(2) + ':1 (icon average color vs toolbar)';
+		badge.textContent = v.label;
+		meta.appendChild(name);
+		meta.appendChild(badge);
+		cell.appendChild(meta);
+		grid.appendChild(cell);
+	});
+}
+
+// ---- magnifier ----
+function drawMagnifier() {
+	var mag = document.getElementById('mag');
+	if (!mag) return;
+	renderToCanvas(16).then(function (src) {
+		var ctx = mag.getContext('2d');
+		ctx.clearRect(0, 0, 16, 16);
+		ctx.imageSmoothingEnabled = false;
+		ctx.drawImage(src, 0, 0);
+	});
+	var box = document.getElementById('mag-box');
+	if (box) box.style.background = currentTheme.toolbar;
+}
+
+// ---- exports ----
+var SIZES = [16, 32, 48, 128];
+function exportPng(size) {
+	renderToCanvas(size).then(canvasToBlob).then(function (blob) {
+		downloadBlob(size + '.png', blob);
+	}).catch(function (e) { alert(e.message); });
+}
+
+// STORE-method ZIP writer (PNG members are already compressed).
+var CRC_TABLE = (function () {
+	var t = new Uint32Array(256);
+	for (var n = 0; n < 256; n++) {
+		var c = n;
+		for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+		t[n] = c >>> 0;
+	}
+	return t;
+})();
+function crc32(data) {
+	var crc = 0xffffffff;
+	for (var i = 0; i < data.length; i++) crc = CRC_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+	return (crc ^ 0xffffffff) >>> 0;
+}
+function ZipBuilder() { this.entries = []; this.chunks = []; this.offset = 0; }
+ZipBuilder.prototype.push = function (chunk) { this.chunks.push(chunk); this.offset += chunk.length; };
+ZipBuilder.prototype.addFile = function (name, content) {
+	var data = typeof content === 'string' ? new TextEncoder().encode(content) : content;
+	var nameBytes = new TextEncoder().encode(name);
+	var crc = crc32(data);
+	var d = new Date();
+	var dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2);
+	var dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+	var h = new DataView(new ArrayBuffer(30));
+	h.setUint32(0, 0x04034b50, true);
+	h.setUint16(4, 20, true);
+	h.setUint16(6, 0x0800, true);
+	h.setUint16(8, 0, true);
+	h.setUint16(10, dosTime, true);
+	h.setUint16(12, dosDate, true);
+	h.setUint32(14, crc, true);
+	h.setUint32(18, data.length, true);
+	h.setUint32(22, data.length, true);
+	h.setUint16(26, nameBytes.length, true);
+	h.setUint16(28, 0, true);
+	this.entries.push({ name: name, size: data.length, crc: crc, offset: this.offset, dosTime: dosTime, dosDate: dosDate });
+	this.push(new Uint8Array(h.buffer));
+	this.push(nameBytes);
+	this.push(data);
+};
+ZipBuilder.prototype.toBlob = function () {
+	var central = [];
+	var centralSize = 0;
+	this.entries.forEach(function (e) {
+		var nameBytes = new TextEncoder().encode(e.name);
+		var r = new DataView(new ArrayBuffer(46));
+		r.setUint32(0, 0x02014b50, true);
+		r.setUint16(4, 20, true);
+		r.setUint16(6, 20, true);
+		r.setUint16(8, 0x0800, true);
+		r.setUint16(10, 0, true);
+		r.setUint16(12, e.dosTime, true);
+		r.setUint16(14, e.dosDate, true);
+		r.setUint32(16, e.crc, true);
+		r.setUint32(20, e.size, true);
+		r.setUint32(24, e.size, true);
+		r.setUint16(28, nameBytes.length, true);
+		r.setUint32(42, e.offset, true);
+		central.push(new Uint8Array(r.buffer), nameBytes);
+		centralSize += 46 + nameBytes.length;
+	});
+	var end = new DataView(new ArrayBuffer(22));
+	end.setUint32(0, 0x06054b50, true);
+	end.setUint16(8, this.entries.length, true);
+	end.setUint16(10, this.entries.length, true);
+	end.setUint32(12, centralSize, true);
+	end.setUint32(16, this.offset, true);
+	return new Blob(this.chunks.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
+};
+
+function exportZip() {
+	var btn = document.getElementById('zip-btn');
+	btn.disabled = true;
+	var zip = new ZipBuilder();
+	var work = SIZES.reduce(function (p, size) {
+		return p.then(function () {
+			return renderToCanvas(size).then(canvasToBlob).then(function (blob) {
+				return blob.arrayBuffer().then(function (buf) {
+					zip.addFile('icons/' + size + '.png', new Uint8Array(buf));
+				});
+			});
+		});
+	}, Promise.resolve());
+	work.then(function () {
+		if (CFG.isSvg && CFG.svgSource) zip.addFile('icon.svg', activeSvgSource());
+		zip.addFile('manifest-icons.json', CFG.manifestSnippet + '\n');
+		downloadBlob(CFG.safeName + '-icons.zip', zip.toBlob());
+	}).catch(function (e) { alert(e.message); }).then(function () { btn.disabled = false; });
+}
+
+function copySnippet() {
+	var btn = document.getElementById('copy-btn');
+	navigator.clipboard.writeText(CFG.manifestSnippet).then(function () {
+		var prev = btn.textContent;
+		btn.textContent = '✓ Copied';
+		setTimeout(function () { btn.textContent = prev; }, 1800);
+	}, function () { alert('Clipboard unavailable — copy the snippet below manually.'); });
+}
+
+// ---- recommended improvement prompt ----
+// Assembled from the same analysis that drives the badges: per-palette
+// contrast verdicts, the mid-gray heuristic, canvas usage, and the raster
+// source note. The result is a ready-to-paste prompt for whatever draws the
+// icon (a coding agent on the free path, or the hosted dojo generator).
+function collectIconIssues() {
+	if (!iconStats) return [];
+	var issues = [];
+	var bad = [], weak = [];
+	THEMES.forEach(function (t) {
+		var theme = materialize(t);
+		var v = contrastBadge(theme);
+		var where = theme.label + ' (' + theme.toolbar + ')';
+		if (v.cls === 'bad') bad.push(where);
+		else if (v.cls === 'weak') weak.push(where);
+	});
+	if (bad.length) issues.push({
+		label: 'Melts into: ' + bad.join(', '),
+		line: 'The icon melts into these toolbar backgrounds: ' + bad.join(', ') + ' — contrast ratio under 1.45:1. Raise contrast against them with a lighter/darker or more saturated fill, or add a contrasting outline or backdrop shape.'
+	});
+	if (weak.length) issues.push({
+		label: 'Low contrast on: ' + weak.join(', '),
+		line: 'Contrast is weak on these toolbars: ' + weak.join(', ') + ' — under 2.2:1. Nudge the fill color or add a subtle outline so the silhouette separates from these backgrounds.'
+	});
+	if (isMidGray()) issues.push({
+		label: 'Mid-gray average color',
+		line: 'The average color is a low-saturation mid-gray, which reads as "part of the toolbar" on every theme. Use a saturated brand color, or add a clearly darker/lighter outline or backdrop shape.'
+	});
+	if (iconStats.fill > 0 && iconStats.fill < 0.88) issues.push({
+		label: 'Artwork fills only ' + Math.round(iconStats.fill * 100) + '% of the canvas',
+		line: 'The artwork fills only ' + Math.round(iconStats.fill * 100) + '% of its canvas — scale it edge-to-edge (leave about 2% breathing room) so the 16 px toolbar render is as large as possible.'
+	});
+	if (!CFG.isSvg) issues.push({
+		label: 'Raster PNG source',
+		line: 'The source is a raster PNG. Redraw it as a clean vector SVG (a single <svg' + '> element with a square viewBox, flat shapes) so every size renders crisp.'
+	});
+	return issues;
+}
+
+function buildRecommendedPrompt(issues) {
+	var lines = [
+		'Improve the browser-extension icon for "' + CFG.name + '". Keep the current concept and silhouette, but fix every issue below, found by a toolbar-preview check:',
+		''
+	];
+	issues.forEach(function (it) { lines.push('- ' + it.line); });
+	lines.push('');
+	lines.push('Hard requirements: a single <svg' + '> element with a square viewBox, flat shapes, one bold silhouette readable at 16 px, no text, no strokes thinner than 1.5 px at 16 px scale, no embedded raster images, no scripts, no external references.');
+	lines.push('After redrawing, re-check with: npx @extenshi/cli icon preview icon.svg --name "' + CFG.name + '"');
+	return lines.join('\n');
+}
+
+function renderRecommendedPrompt() {
+	var card = document.getElementById('prompt-card');
+	if (!card) return;
+	var issues = collectIconIssues();
+	if (!issues.length) return; // nothing to fix — the card stays hidden
+	var list = document.getElementById('prompt-issues');
+	list.textContent = '';
+	issues.forEach(function (it) {
+		var li = document.createElement('li');
+		li.textContent = it.label;
+		list.appendChild(li);
+	});
+	var text = buildRecommendedPrompt(issues);
+	document.getElementById('prompt-text').textContent = text;
+	var btn = document.getElementById('prompt-copy-btn');
+	btn.addEventListener('click', function () {
+		navigator.clipboard.writeText(text).then(function () {
+			var prev = btn.textContent;
+			btn.textContent = '✓ Copied';
+			setTimeout(function () { btn.textContent = prev; }, 1800);
+		}, function () { alert('Clipboard unavailable — copy the prompt below manually.'); });
+	});
+	card.hidden = false;
+}
+
+// ---- report light/dark theme (matches the scan report) ----
+function initReportTheme() {
+	var root = document.documentElement;
+	var btn = document.getElementById('theme-toggle');
+	if (!btn) return; // embedded mode has no topbar
+	function syncLabel() { btn.textContent = root.classList.contains('dark') ? '☀ Light' : '☾ Dark'; }
+	syncLabel();
+	btn.addEventListener('click', function () {
+		var dark = root.classList.toggle('dark');
+		try { localStorage.setItem('extenshi-report-theme', dark ? 'dark' : 'light'); } catch (e) {}
+		syncLabel();
+	});
+}
+
+// ---- boot ----
+function boot() {
+	initReportTheme();
+	var chips = document.getElementById('theme-chips');
+	THEMES.forEach(function (theme, i) {
+		var chip = document.createElement('button');
+		chip.type = 'button';
+		chip.className = 'chip' + (i === 0 ? ' active' : '');
+		chip.setAttribute('data-theme', theme.id);
+		var sw = document.createElement('span');
+		sw.className = 'sw';
+		sw.style.background = theme.toolbar;
+		chip.appendChild(sw);
+		chip.appendChild(document.createTextNode(theme.label));
+		chip.addEventListener('click', function () { applyTheme(theme); renderContrastGrid(); });
+		chips.appendChild(chip);
+	});
+	document.getElementById('custom-color').addEventListener('input', function (e) {
+		applyTheme(deriveTheme(e.target.value));
+		renderContrastGrid();
+	});
+	document.getElementById('hl-toggle').addEventListener('change', function (e) {
+		document.querySelectorAll('.pin.yours').forEach(function (p) {
+			p.classList.toggle('hl', e.target.checked);
+		});
+	});
+	SIZES.forEach(function (size) {
+		var el = document.getElementById('png-' + size);
+		if (el) el.addEventListener('click', function () { exportPng(size); });
+	});
+	// Export controls are absent in embedded mode — the host UI has its own.
+	var zipBtn = document.getElementById('zip-btn');
+	if (zipBtn) zipBtn.addEventListener('click', exportZip);
+	var copyBtn = document.getElementById('copy-btn');
+	if (copyBtn) copyBtn.addEventListener('click', copySnippet);
+
+	var trimToggle = document.getElementById('trim-toggle');
+	if (trimToggle) trimToggle.addEventListener('change', function (e) {
+		trimOn = e.target.checked;
+		refreshIconEverywhere();
+	});
+
+	analyzeIcon().then(function () {
+		renderContrastGrid();
+		drawMagnifier();
+		renderFillNote();
+		var mg = document.getElementById('midgray-note');
+		if (mg && isMidGray()) mg.hidden = false;
+		renderRecommendedPrompt();
+		return computeTrimmedVariant();
+	}).catch(function (e) {
+		document.getElementById('contrast-grid').textContent = 'Contrast analysis unavailable: ' + e.message;
+	});
+}
+document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
+</script>
+</body>
+</html>
