@@ -12,6 +12,7 @@
 import { UserError } from 'fastmcp'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bff } from './bff.js'
+import { scanArtifact } from './scan.js'
 import { captureError, captureEvent } from './telemetry.js'
 import { type Capability, isExpectedError, registerTools, type ToolDeps } from './tools.js'
 
@@ -25,6 +26,14 @@ vi.mock('./telemetry.js', async (importOriginal) => ({
 	captureEvent: vi.fn(),
 	captureError: vi.fn(),
 }))
+
+// Stub the real scan network call so scan_extension tests never hit the backend;
+// `ScanError` is preserved (tools.ts imports + instanceof-checks it) via importOriginal.
+vi.mock('./scan.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('./scan.js')>()),
+	scanArtifact: vi.fn(),
+}))
+const mockedScanArtifact = vi.mocked(scanArtifact)
 
 interface RecordedTool {
 	name: string
@@ -68,19 +77,26 @@ function depsFor(capabilities: Capability[]): ToolDeps {
 	}
 }
 
-const READ_TOOLS = ['search_extensions', 'get_extension', 'get_reviews', 'get_security', 'market_overview']
+const READ_TOOLS = [
+	'search_extensions',
+	'get_extension',
+	'get_reviews',
+	'get_security',
+	'market_overview',
+	'get_credit_balance',
+]
 const DOCS_TOOLS = ['search_docs', 'generate_icon_workflow']
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 9 tools', () => {
+	it('stdio (all capabilities) registers all 10 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(9)
+		expect(names).toHaveLength(10)
 	})
 
-	it('remote (read + docs only) registers the 7 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 8 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
@@ -218,6 +234,210 @@ describe('get_reviews execute — arg mapping', () => {
 	})
 })
 
+/** Register the read tools against a stub BFF and return them keyed by name. */
+function readToolsWith(stubBff: Partial<Bff>): Record<string, any> {
+	const tools: Record<string, any> = {}
+	const server = {
+		addTool: (t: { name: string }) => {
+			tools[t.name] = t
+		},
+	}
+	registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+		cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+		capabilities: new Set<Capability>(['read']),
+		getBff: () => stubBff as Bff,
+	})
+	return tools
+}
+
+describe('get_credit_balance execute', () => {
+	it('returns every pool from the FREE balance endpoint verbatim', async () => {
+		const balance = {
+			read: { remaining: 42, freeRemaining: 3, freeGranted: 10, freeUsed: 7 },
+			scan: { remaining: 5, freeRemaining: 0, freeGranted: 3, freeUsed: 3 },
+			// icon/inventory report total spendable (purchased + free), consistent with
+			// the BFF invariant freeRemaining ≤ remaining — never freeRemaining > remaining.
+			icon: { remaining: 6, freeRemaining: 2, freeGranted: 2, freeUsed: 0 },
+			inventory: { remaining: 1, freeRemaining: 1, freeGranted: 1, freeUsed: 0 },
+			billingUrl: 'https://dojo.extenshi.io/billing',
+		}
+		let called = 0
+		const tools = readToolsWith({
+			getApiCallerBalance: () => {
+				called++
+				return Promise.resolve(balance)
+			},
+		})
+
+		const out: string = await tools.get_credit_balance.execute({}, {})
+		expect(called).toBe(1)
+		expect(JSON.parse(out)).toEqual(balance)
+	})
+})
+
+describe('extension reference resolution (extension_id | store_id)', () => {
+	it('get_extension resolves a store_id to a catalog id via the FREE resolver', async () => {
+		const resolveCalls: Array<Record<string, unknown>> = []
+		let gotId: number | undefined
+		const tools = readToolsWith({
+			resolveExtensionRef: (input) => {
+				resolveCalls.push(input)
+				return Promise.resolve({ id: 42, store: 'CHROME' })
+			},
+			getExtensionById: (id: number) => {
+				gotId = id
+				return Promise.resolve(null) // triggers the authored "no extension" message below
+			},
+		})
+
+		// store_id + explicit store → one resolve call, then the read uses the resolved id.
+		await expect(
+			tools.get_extension.execute({ store_id: 'cjpalhdlnbpafiamejdnhcphjbkeiagm', store: 'CHROME' }, {}),
+		).rejects.toThrow('42')
+		expect(resolveCalls).toEqual([{ storeId: 'cjpalhdlnbpafiamejdnhcphjbkeiagm', store: 'CHROME' }])
+		expect(gotId).toBe(42)
+	})
+
+	it('get_security resolves a store_id ONCE and reuses it across its 3 metered calls', async () => {
+		let resolveCount = 0
+		const ids: number[] = []
+		const capture = (id: number) => {
+			ids.push(id)
+			return Promise.resolve(null)
+		}
+		const tools = readToolsWith({
+			resolveExtensionRef: () => {
+				resolveCount++
+				return Promise.resolve({ id: 88, store: 'FIREFOX' })
+			},
+			getSecurityData: capture,
+			getRiskSummary: capture,
+			getExtensionById: capture,
+		})
+
+		await tools.get_security.execute({ store_id: 'dark-reader' }, {})
+		// Resolved once (not per-call), and all three metered reads use the resolved id.
+		expect(resolveCount).toBe(1)
+		expect(ids).toEqual([88, 88, 88])
+	})
+
+	it('get_reviews maps a resolved store_id into the BFF extensionId', async () => {
+		const calls: Record<string, unknown>[] = []
+		const tools = readToolsWith({
+			resolveExtensionRef: () => Promise.resolve({ id: 99, store: 'FIREFOX' }),
+			getReviews: (input: Record<string, unknown>) => {
+				calls.push(input)
+				return Promise.resolve({ items: [], nextCursor: null })
+			},
+		})
+
+		await tools.get_reviews.execute({ store_id: 'dark-reader', limit: 20 }, {})
+		expect(calls[0]).toMatchObject({ extensionId: 99, sort: 'recent' })
+	})
+
+	it('an explicit extension_id skips resolution entirely', async () => {
+		let resolveCalled = false
+		let gotId: number | undefined
+		const tools = readToolsWith({
+			resolveExtensionRef: () => {
+				resolveCalled = true
+				return Promise.resolve(null)
+			},
+			getExtensionById: (id: number) => {
+				gotId = id
+				return Promise.resolve(null)
+			},
+		})
+
+		await expect(tools.get_extension.execute({ extension_id: 7 }, {})).rejects.toThrow('7')
+		expect(resolveCalled).toBe(false)
+		expect(gotId).toBe(7)
+	})
+
+	it('errors actionably when neither extension_id nor store_id is given', async () => {
+		const tools = readToolsWith({
+			getExtensionById: () => Promise.resolve({ id: 1 }),
+		})
+		await expect(tools.get_extension.execute({}, {})).rejects.toThrow(
+			/extension_id.*store_id|store_id.*extension_id/s,
+		)
+	})
+
+	it('surfaces a BAD_REQUEST (ambiguous Chrome/Edge id) as an actionable message', async () => {
+		const tools = readToolsWith({
+			resolveExtensionRef: () =>
+				Promise.reject(
+					Object.assign(new Error('has the Chrome/Edge id format … pass store: "CHROME" or store: "EDGE"'), {
+						data: { code: 'BAD_REQUEST', httpStatus: 400 },
+					}),
+				),
+		})
+		await expect(
+			tools.get_extension.execute({ store_id: 'cjpalhdlnbpafiamejdnhcphjbkeiagm' }, {}),
+		).rejects.toThrow(/CHROME.*EDGE/s)
+	})
+})
+
+describe('scan_extension store-id association', () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	/** Register just scan_extension (scan capability) against a stub BFF. */
+	function scanToolWith(stubBff: Partial<Bff>): any {
+		const tools: Record<string, any> = {}
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['scan']),
+			getBff: () => stubBff as Bff,
+			requireApiKey: () => 'ek_test',
+		})
+		return tools.scan_extension
+	}
+
+	it('resolves a store_id and passes the catalog id as the scan association', async () => {
+		mockedScanArtifact.mockResolvedValue({} as Awaited<ReturnType<typeof scanArtifact>>)
+		const tool = scanToolWith({ resolveExtensionRef: () => Promise.resolve({ id: 55, store: 'CHROME' }) })
+
+		await tool.execute(
+			{ artifact_path: './x.zip', store_id: 'cjpalhdlnbpafiamejdnhcphjbkeiagm', store: 'CHROME' },
+			{},
+		)
+		expect(mockedScanArtifact).toHaveBeenCalledTimes(1)
+		// The resolved numeric id reaches the scan backend as a string association.
+		expect(mockedScanArtifact.mock.calls[0][0]).toMatchObject({ extensionId: '55' })
+	})
+
+	it('fails fast on an ambiguous/unresolvable store_id WITHOUT spending a scan', async () => {
+		const tool = scanToolWith({
+			resolveExtensionRef: () =>
+				Promise.reject(
+					Object.assign(new Error('pass store: "CHROME" or store: "EDGE"'), {
+						data: { code: 'BAD_REQUEST', httpStatus: 400 },
+					}),
+				),
+		})
+
+		await expect(
+			tool.execute({ artifact_path: './x.zip', store_id: 'cjpalhdlnbpafiamejdnhcphjbkeiagm' }, {}),
+		).rejects.toThrow(/CHROME.*EDGE/s)
+		// The critical invariant: no scan credit is spent when the id can't be resolved.
+		expect(mockedScanArtifact).not.toHaveBeenCalled()
+	})
+
+	it('scans with no association when neither extension_id nor store_id is given', async () => {
+		mockedScanArtifact.mockResolvedValue({} as Awaited<ReturnType<typeof scanArtifact>>)
+		const tool = scanToolWith({})
+
+		await tool.execute({ artifact_path: './x.zip' }, {})
+		expect(mockedScanArtifact).toHaveBeenCalledTimes(1)
+		expect(mockedScanArtifact.mock.calls[0][0].extensionId).toBeUndefined()
+	})
+})
+
 // The Anthropic Connectors Directory submission portal auto-syncs the server's
 // tools and refuses to submit any tool missing a `title` or a read/write hint.
 // This contract guards that every tool ships those annotations, and that the
@@ -226,7 +446,7 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(9)
+		expect(tools).toHaveLength(10)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')

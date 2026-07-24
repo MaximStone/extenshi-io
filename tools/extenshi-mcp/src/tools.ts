@@ -75,7 +75,11 @@ export const SERVER_INSTRUCTIONS =
 	'key) to consult the live product documentation and the @extenshi/cli command reference — ' +
 	'prefer quoting exact CLI commands and flags from the docs over guessing. Use ' +
 	'generate_icon_workflow (free, no key) when the developer needs an extension icon — it ' +
-	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. The catalog and ' +
+	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. Call ' +
+	'get_credit_balance (free — it never spends a credit) to check remaining read/scan credits ' +
+	'before a large batch instead of guessing whether it is safe. In get_extension / get_reviews / ' +
+	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
+	'(the id in the store URL; add the store for a Chrome/Edge id). The catalog and ' +
 	`scan tools require an Extenshi API key (${KEY_PAGE}). Every account gets a one-time free ` +
 	'allowance — 10 reads and 3 scans; beyond it, buy prepaid credit packs (scans ' +
 	`and reads, never expire) at ${BILLING_PAGE}.`
@@ -269,6 +273,92 @@ function instrument<Params extends ToolParameters>(
 	}
 }
 
+// ── Extension reference (numeric catalog id OR store id) ─────────────────────
+
+/**
+ * The shared parameter shape for "which extension" across the read tools. A
+ * caller may point at an extension EITHER by its numeric catalog `extension_id`
+ * (from search_extensions, as before) OR by its public `store_id` — the id in
+ * the store URL — which is often the only precise identifier an agent has.
+ *
+ * `extension_id` is now optional (it used to be required); this is
+ * backward-compatible — existing callers that pass it are unaffected, and
+ * resolveExtensionId() enforces that exactly one form is supplied.
+ */
+const EXTENSION_REF_SHAPE = {
+	extension_id: z.number().int().optional().describe('Numeric catalog ID (from search_extensions results).'),
+	store_id: z
+		.string()
+		.min(1)
+		.max(100)
+		.optional()
+		.describe(
+			'Alternative to extension_id: the extension’s id in its store URL (e.g. Chrome ' +
+				'"cjpalhdlnbpafiamejdnhcphjbkeiagm"). For a Chrome/Edge id (32 letters a–p) you MUST also ' +
+				'pass `store` — both stores share that format. Firefox ids (slug / GUID / email) are ' +
+				'unambiguous. Resolving a store_id is free; only the read that follows costs a credit.',
+		),
+	store: z
+		.enum(['CHROME', 'FIREFOX', 'EDGE'])
+		.optional()
+		.describe('Which store `store_id` belongs to. REQUIRED for Chrome/Edge ids (identical format).'),
+} as const
+
+/** The subset of {@link EXTENSION_REF_SHAPE}'s parsed args resolveExtensionId reads. */
+type ExtensionRefArgs = {
+	extension_id?: number
+	store_id?: string
+	store?: 'CHROME' | 'FIREFOX' | 'EDGE'
+}
+
+/**
+ * Resolve an extension reference to a numeric catalog id. Prefers an explicit
+ * `extension_id`; otherwise resolves `store_id` (+ `store`) via the FREE
+ * `resolveExtensionRef` BFF endpoint — so a store-id read costs exactly one
+ * credit (the read itself), never two. Throws an actionable UserError when
+ * neither form is supplied, when the store id is ambiguous/invalid (surfaced from
+ * the backend as an authored message, so it reads as expected — not a fault), or
+ * when no catalog listing exists for it yet.
+ */
+async function resolveExtensionId(client: Bff, args: ExtensionRefArgs): Promise<number> {
+	if (typeof args.extension_id === 'number') return args.extension_id
+	if (args.store_id) {
+		let ref: Awaited<ReturnType<Bff['resolveExtensionRef']>>
+		try {
+			ref = await client.resolveExtensionRef({ storeId: args.store_id, store: args.store })
+		} catch (err) {
+			// A BAD_REQUEST is a caller-input problem (ambiguous/invalid store id),
+			// not a fault: re-throw the backend's message as an authored UserError so
+			// it surfaces to the agent as guidance and doesn't open a tracking issue.
+			const code = (err as { data?: { code?: string } } | null)?.data?.code
+			if (code === 'BAD_REQUEST') throw new UserError(err instanceof Error ? err.message : String(err))
+			throw err
+		}
+		if (!ref) {
+			throw new UserError(
+				`No catalog extension found for store id "${args.store_id}"${args.store ? ` in ${args.store}` : ''}. ` +
+					'It may not be in the catalog yet — try search_extensions by name, or double-check the id.',
+			)
+		}
+		return ref.id
+	}
+	throw new UserError(
+		'Specify the extension: pass extension_id (numeric catalog id from search_extensions) OR ' +
+			'store_id (the id in the store URL; add `store` for a Chrome/Edge id).',
+	)
+}
+
+/**
+ * Optional variant for tools where the extension link is not required (scan
+ * association): returns the resolved id, or undefined when NEITHER form is given.
+ * A supplied-but-unresolvable store_id still throws (via resolveExtensionId) so a
+ * typo is caught before a scan credit is spent, rather than silently dropped.
+ */
+async function resolveOptionalExtensionId(client: Bff, args: ExtensionRefArgs): Promise<number | undefined> {
+	if (typeof args.extension_id !== 'number' && !args.store_id) return undefined
+	return resolveExtensionId(client, args)
+}
+
 // ── Registration ─────────────────────────────────────────────────────────────
 
 /**
@@ -315,6 +405,12 @@ const TOOL_ANNOTATIONS: Record<
 	},
 	market_overview: {
 		title: 'Catalog market overview',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	get_credit_balance: {
+		title: 'Check credit balance',
 		readOnlyHint: true,
 		idempotentHint: true,
 		openWorldHint: true,
@@ -479,15 +575,16 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 		add({
 			name: 'get_extension',
 			description:
-				'Get full catalog detail for one extension by its numeric catalog ID: metadata, ' +
-				'per-store ratings, install counts, categories, and a security badge.',
-			parameters: z.object({
-				extension_id: z.number().int().describe('Numeric catalog ID (from search_extensions results).'),
-			}),
+				'Get full catalog detail for one extension: metadata, per-store ratings, install counts, ' +
+				'categories, and a security badge. Identify it by numeric catalog `extension_id` OR by its ' +
+				'`store_id` (the id in the store URL; add `store` for a Chrome/Edge id).',
+			parameters: z.object({ ...EXTENSION_REF_SHAPE }),
 			execute: async (args, context) => {
 				try {
-					const result = await bff(context).getExtensionById(args.extension_id)
-					if (!result) throw new UserError(`No extension found with catalog ID ${args.extension_id}.`)
+					const client = bff(context)
+					const extensionId = await resolveExtensionId(client, args)
+					const result = await client.getExtensionById(extensionId)
+					if (!result) throw new UserError(`No extension found with catalog ID ${extensionId}.`)
 					return JSON.stringify(shapeExtension(result), null, 2)
 				} catch (err) {
 					return readError(err, missingKeyMessage)
@@ -508,7 +605,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				'keep the same `sort` while paging, and start over if you change it. Reads existing ' +
 				'scraped reviews; use `min_rating` to see only positive or only critical feedback.',
 			parameters: z.object({
-				extension_id: z.number().int().describe('Numeric catalog ID (from search_extensions results).'),
+				...EXTENSION_REF_SHAPE,
 				limit: z.number().int().min(1).max(50).default(20).describe('Max reviews to return (1–50).'),
 				cursor: z
 					.number()
@@ -530,9 +627,11 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 			}),
 			execute: async (args, context) => {
 				try {
+					const client = bff(context)
+					const extensionId = await resolveExtensionId(client, args)
 					const limit = args.limit
-					const result = await bff(context).getReviews({
-						extensionId: args.extension_id,
+					const result = await client.getReviews({
+						extensionId,
 						limit,
 						cursor: args.cursor,
 						languageId: args.language_id,
@@ -554,20 +653,21 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				'severity, and the top grouped findings (scanner, rule, severity, count). Also returns ' +
 				'the install-dialog preview — exactly what Chrome/Firefox show users in the permission ' +
 				'prompt at install (consolidated + deduped from the manifest), available even for ' +
-				'unscanned extensions. Reads existing scan results — does not trigger a new scan.',
-			parameters: z.object({
-				extension_id: z.number().int().describe('Numeric catalog ID.'),
-			}),
+				'unscanned extensions. Reads existing scan results — does not trigger a new scan. ' +
+				'Identify the extension by numeric `extension_id` OR `store_id` (+`store` for Chrome/Edge). ' +
+				'NB: this tool costs 3 read credits (it fetches security, risk, and install-preview data).',
+			parameters: z.object({ ...EXTENSION_REF_SHAPE }),
 			execute: async (args, context) => {
 				try {
 					const client = bff(context)
+					const extensionId = await resolveExtensionId(client, args)
 					// getExtensionById carries `installDialogPreview` (a manifest transform,
 					// independent of scanning) — fetch it alongside the scan data so the
 					// security view always includes the install prompt the user would see.
 					const [security, riskSummary, extension] = await Promise.all([
-						client.getSecurityData(args.extension_id).catch(() => null),
-						client.getRiskSummary(args.extension_id).catch(() => null),
-						client.getExtensionById(args.extension_id).catch(() => null),
+						client.getSecurityData(extensionId).catch(() => null),
+						client.getRiskSummary(extensionId).catch(() => null),
+						client.getExtensionById(extensionId).catch(() => null),
 					])
 					const installDialogPreview =
 						extension && typeof extension === 'object'
@@ -652,6 +752,28 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				}
 			},
 		})
+
+		add({
+			name: 'get_credit_balance',
+			description:
+				'Check your remaining Extenshi credits BEFORE running a batch, so you never guess whether a ' +
+				'large request is safe. Returns every credit pool for your API key: `read` (spent one-per-call by ' +
+				'search_extensions / get_extension / get_reviews / market_overview; get_security costs 3) and ' +
+				'`scan` (spent by scan_extension), plus `icon` and `inventory`. Each pool reports `remaining` — the ' +
+				'number that actually gates calls (one-time free grant + purchased credits) — and `freeRemaining` ' +
+				'(how much of the never-renewing signup grant is left). FREE to call: checking your balance never ' +
+				'spends a credit. Rule of thumb: to fetch N extensions you need read.remaining ≥ N (≥ 3N if you ' +
+				'also call get_security on each).',
+			parameters: z.object({}),
+			execute: async (_args, context) => {
+				try {
+					const balance = await bff(context).getApiCallerBalance()
+					return JSON.stringify(balance, null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
 	}
 
 	// ── Documentation (free; no API key required) ──────────────────────────────
@@ -725,20 +847,35 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				artifact_path: z
 					.string()
 					.describe('Absolute or relative path to the built extension artifact (≤50 MB).'),
-				extension_id: z
-					.number()
-					.int()
-					.optional()
-					.describe('Optional numeric catalog ID to associate the scan with a catalog listing.'),
+				// Optional association with a catalog listing — by numeric id OR store id.
+				// Reuse the shared ref validators but override the descriptions: here the
+				// ref is an optional ASSOCIATION for the scan, not a lookup key, so the
+				// shared "from search_extensions results" wording would mislead an agent.
+				extension_id: EXTENSION_REF_SHAPE.extension_id.describe(
+					'Optional numeric catalog ID to associate this scan with a catalog listing.',
+				),
+				store_id: EXTENSION_REF_SHAPE.store_id.describe(
+					'Optional: associate this scan with a catalog listing by its store id (the id in the ' +
+						'store URL; add `store` for a Chrome/Edge id).',
+				),
+				store: EXTENSION_REF_SHAPE.store,
 			}),
 			execute: async (args, context) => {
 				const apiKey = requireApiKey(context)
+				// Resolve the optional catalog association BEFORE spending a scan credit,
+				// so a mistyped store_id fails fast instead of after the scan runs.
+				let extensionId: number | undefined
+				try {
+					extensionId = await resolveOptionalExtensionId(bff(context), args)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
 				try {
 					const report = await scanArtifact({
 						artifactPath: args.artifact_path,
 						apiKey,
 						scanUrl: deps.cfg.scanUrl,
-						extensionId: args.extension_id?.toString(),
+						extensionId: extensionId?.toString(),
 						onProgress: (p) => {
 							if (typeof p.total === 'number' && p.total > 0) {
 								void context.reportProgress({ progress: p.completed ?? 0, total: p.total })

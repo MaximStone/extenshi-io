@@ -17,6 +17,31 @@ import { createTRPCClient, httpBatchLink } from '@trpc/client'
 
 type AnyTRPCClient = any
 
+/** One credit pool as reported by `getApiCallerBalance`. */
+export interface CreditPool {
+	/** Total calls this pool can still fund (free grant + purchased) — the single number that gates a call. */
+	remaining: number
+	/** The slice of `remaining` still coming from the one-time signup grant (always ≤ remaining). */
+	freeRemaining: number
+	freeGranted: number
+	freeUsed: number
+}
+
+/** Read/scan/icon/inventory balances for the `ek_` key or remote-MCP identity. */
+export interface ApiCallerBalance {
+	read: CreditPool
+	scan: CreditPool
+	icon: CreditPool
+	inventory: CreditPool
+	billingUrl: string
+}
+
+/** A resolved store→catalog reference (`resolveExtensionRef`). */
+export interface ExtensionRef {
+	id: number
+	store: 'CHROME' | 'FIREFOX' | 'EDGE'
+}
+
 export interface Bff {
 	searchExtensions(input: Record<string, unknown>): Promise<unknown>
 	getExtensionById(id: number): Promise<unknown>
@@ -30,6 +55,17 @@ export interface Bff {
 	getExtendedFilterFacets(): Promise<unknown>
 	/** Catalog-wide category tree with per-category counts. */
 	getCategoryTree(): Promise<unknown>
+	/** This caller's credit balances across all pools. FREE — never spends a read credit. */
+	getApiCallerBalance(): Promise<ApiCallerBalance>
+	/**
+	 * Resolve a public STORE extension id (from the store URL) to the numeric
+	 * catalog id the read tools take. FREE — the read that follows is what's
+	 * metered. Returns null when no catalog listing exists for it yet.
+	 */
+	resolveExtensionRef(input: {
+		storeId: string
+		store?: 'CHROME' | 'FIREFOX' | 'EDGE'
+	}): Promise<ExtensionRef | null>
 }
 
 /** Build a BFF client from a static `ek_…` key (stdio path). */
@@ -65,5 +101,7 @@ export function makeBffWithAuth(bffUrl: string, authHeader: () => string | Promi
 		getStats: () => client.catalog.getStats.query(),
 		getExtendedFilterFacets: () => client.catalog.getExtendedFilterFacets.query(),
 		getCategoryTree: () => client.catalog.getCategoryTree.query(),
+		getApiCallerBalance: () => client.cli.getApiCallerBalance.query(),
+		resolveExtensionRef: (input) => client.catalog.resolveExtensionRef.query(input),
 	}
 }
