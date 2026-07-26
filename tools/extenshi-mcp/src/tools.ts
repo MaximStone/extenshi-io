@@ -23,7 +23,8 @@
  *   ─────────────────────────────────────────────────────────────
  *   'read'    → search_extensions, get_extension, get_reviews,
  *               get_security, market_overview
- *   'docs'    → search_docs, generate_icon_workflow  (free; no key)
+ *   'docs'    → search_docs, generate_icon_workflow,
+ *               generate_welcome_page_workflow        (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
  *   'publish' → publish_extension          (local creds; stdio only)
  *
@@ -46,6 +47,7 @@ import { ScanError, scanArtifact } from './scan.js'
 import { describeStoreConstraints, validateSearchFilters } from './search-filters.js'
 import { shapeExtension, shapeReviews, shapeSearch, shapeSecurity } from './shape.js'
 import { captureError, captureEvent, classifyError } from './telemetry.js'
+import { renderWelcomeWorkflow } from './welcome-workflow.js'
 
 // ── Public links (shared by tool bodies + server instructions) ──────────────
 
@@ -75,7 +77,10 @@ export const SERVER_INSTRUCTIONS =
 	'key) to consult the live product documentation and the @extenshi/cli command reference — ' +
 	'prefer quoting exact CLI commands and flags from the docs over guessing. Use ' +
 	'generate_icon_workflow (free, no key) when the developer needs an extension icon — it ' +
-	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. Call ' +
+	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. Use ' +
+	'generate_welcome_page_workflow (free, no key) when the developer needs the page shown right ' +
+	'after install — it returns which illustrations to produce for the chosen goal, how to mark ' +
+	'up where to click, and the block JSON to hand back. Call ' +
 	'get_credit_balance (free — it never spends a credit) to check remaining read/scan credits ' +
 	'before a large batch instead of guessing whether it is safe. In get_extension / get_reviews / ' +
 	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
@@ -423,6 +428,12 @@ const TOOL_ANNOTATIONS: Record<
 	},
 	generate_icon_workflow: {
 		title: 'Icon design workflow guide',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: false,
+	},
+	generate_welcome_page_workflow: {
+		title: 'Welcome page design brief',
 		readOnlyHint: true,
 		idempotentHint: true,
 		openWorldHint: false,
@@ -832,6 +843,67 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					.describe('Extension display name to inline into the preview command (optional).'),
 			}),
 			execute: async (args) => renderIconWorkflow({ extensionName: args.extension_name }),
+		})
+
+		add({
+			name: 'generate_welcome_page_workflow',
+			description:
+				'Get the design brief for a browser-extension welcome page — the page a user lands on ' +
+				'right after installing. Returns the one action the page must drive (pin the extension, ' +
+				'keep the new-tab change, use it on a site), exactly which illustrations to produce for ' +
+				'that goal, how to capture and crop them, how to place numbered/arrow markers showing ' +
+				'where to click, the limits enforced on save, and the block JSON to hand back. Pair with ' +
+				'get_extension to reuse the store screenshots Extenshi already hosts. Static content: no ' +
+				'API key, no network, no credits.',
+			parameters: z.object({
+				extension_name: z.string().max(120).optional().describe('Extension display name.'),
+				goal: z
+					.enum(['PIN_EXTENSION', 'NEW_TAB_OPT_IN', 'VISIT_SITE', 'CUSTOM'])
+					.optional()
+					.describe(
+						'The single action the page drives. PIN_EXTENSION (default) fits ~90% of extensions; ' +
+							'NEW_TAB_OPT_IN for new-tab replacements; VISIT_SITE when the extension injects a ' +
+							'widget into a site.',
+					),
+				what_it_does: z
+					.string()
+					.max(1000)
+					.optional()
+					.describe('One or two sentences on what the extension actually does.'),
+				target_site: z
+					.string()
+					.max(200)
+					.optional()
+					.describe('For VISIT_SITE: the site the extension injects into, e.g. youtube.com.'),
+				store_screenshots: z
+					.array(z.string().max(1000))
+					.max(10)
+					.optional()
+					.describe(
+						'Screenshot URLs from get_extension. Offered to the agent as ready-made illustration ' +
+							'material that needs no upload.',
+					),
+				existing_steps: z
+					.array(z.string().max(200))
+					.max(10)
+					.optional()
+					.describe('Steps the author already wrote, so the brief adds visuals instead of rewriting.'),
+				accent_color: z
+					.string()
+					.max(9)
+					.optional()
+					.describe("The page's accent colour as hex, so drawn illustrations match it."),
+			}),
+			execute: async (args) =>
+				renderWelcomeWorkflow({
+					extensionName: args.extension_name,
+					goal: args.goal,
+					whatItDoes: args.what_it_does,
+					targetSite: args.target_site,
+					storeScreenshots: args.store_screenshots,
+					existingSteps: args.existing_steps,
+					accentColor: args.accent_color,
+				}),
 		})
 	}
 

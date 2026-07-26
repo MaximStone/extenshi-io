@@ -85,18 +85,18 @@ const READ_TOOLS = [
 	'market_overview',
 	'get_credit_balance',
 ]
-const DOCS_TOOLS = ['search_docs', 'generate_icon_workflow']
+const DOCS_TOOLS = ['search_docs', 'generate_icon_workflow', 'generate_welcome_page_workflow']
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 10 tools', () => {
+	it('stdio (all capabilities) registers all 11 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(10)
+		expect(names).toHaveLength(11)
 	})
 
-	it('remote (read + docs only) registers the 8 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 9 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
@@ -446,12 +446,33 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(10)
+		expect(tools).toHaveLength(11)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')
 		}
 	})
+
+	// The two static workflow guides are pure functions of their arguments: same
+	// args → same text (idempotent), and they touch no network (closed world).
+	// Pinned per-tool because adding a NEW entry to the annotation map is exactly
+	// how the previous two hints got silently re-attributed away from
+	// generate_icon_workflow — a `title` + `readOnlyHint` check did not notice.
+	it.each(['generate_icon_workflow', 'generate_welcome_page_workflow'])(
+		'%s declares the full static-guide annotation set',
+		(name) => {
+			const { tools, server } = recordingServer()
+			registerTools(server, depsFor(['docs']))
+			const tool = tools.find((t) => t.name === name)
+			expect(tool, `${name} registered`).toBeTruthy()
+			expect(tool?.annotations).toMatchObject({
+				readOnlyHint: true,
+				idempotentHint: true,
+				openWorldHint: false,
+			})
+			expect(tool?.annotations?.title).toBeTruthy()
+		},
+	)
 
 	it('all remote-exposed (read + docs) tools are read-only', () => {
 		const { tools, server } = recordingServer()
