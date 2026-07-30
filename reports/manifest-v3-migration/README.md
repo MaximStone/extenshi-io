@@ -8,31 +8,31 @@ actually moved.
 Each extension is counted once, by the manifest version of its **latest visible
 snapshot**.
 
-> **Snapshot:** 2026-06-23 · **Catalog-wide MV3 adoption: 80.0%**
+> **Snapshot:** 2026-07-30 · **Catalog-wide MV3 adoption: 80.9%**
 
 ## The headline
 
 - **Chrome — effectively 100% MV3.** The Chrome Web Store has finished retiring
   MV2; MV2 listings are essentially gone.
-- **Firefox — still majority MV2 (67.9%).** Firefox supports both formats and
+- **Firefox — still majority MV2 (66.1%).** Firefox supports both formats and
   has not force-migrated, so a large legacy MV2 long-tail persists.
-- **Edge — mostly MV3 (85.7%),** following Chromium, with a smaller MV2 remainder.
+- **Edge — mostly MV3 (86.7%),** following Chromium, with a smaller MV2 remainder.
 
 ## By store
 
 | Store | Extensions | Manifest V3 | Manifest V2 | Unknown |
 |---|---:|---:|---:|---:|
-| Chrome Web Store | 213,897 | 213,896 (100.0%) | 0 (0.0%) | 1 |
-| Firefox Add-ons | 90,277 | 28,216 (31.3%) | 61,281 (67.9%) | 780 |
-| Edge Add-ons | 20,794 | 17,819 (85.7%) | 2,975 (14.3%) | 0 |
+| Chrome Web Store | 228,105 | 228,104 (100.0%) | 0 (0.0%) | 1 |
+| Firefox Add-ons | 93,741 | 30,971 (33.0%) | 61,974 (66.1%) | 796 |
+| Edge Add-ons | 21,648 | 18,762 (86.7%) | 2,886 (13.3%) | 0 |
 
 ```
 Chrome   ████████████████████████████████████████  MV3 100.0%
-Firefox  █████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░  MV3 31.3%
-Edge     ██████████████████████████████████░░░░░░  MV3 85.7%
+Firefox  █████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░  MV3 33.0%
+Edge     ███████████████████████████████████░░░░░  MV3 86.7%
 ```
 
-Catalog-wide: **259,931 MV3** (80.0%) · **64,256 MV2** (19.8%) · 781 unknown.
+Catalog-wide: **277,837 MV3** (80.9%) · **64,860 MV2** (18.9%) · 797 unknown.
 
 Raw data: [`data/manifest-version.csv`](./data/manifest-version.csv)
 
