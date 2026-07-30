@@ -1,7 +1,7 @@
 # extenshi.io
 
 > **The browser-extension intelligence platform.** A cross-store catalog of
-> **324,000+ extensions** (Chrome, Firefox, Edge) with security analysis, plus
+> **343,000+ extensions** (Chrome, Firefox, Edge) with security analysis, plus
 > developer tooling for analytics, pre-publish scanning, and multi-store
 > publishing.
 
@@ -23,7 +23,7 @@ analysis, pre-publish security scanning, and one-command multi-store publishing.
 
 | | |
 |---|---|
-| 🔎 **Catalog** | <https://catalog.extenshi.io> — search 324k+ extensions, filter by store / category / pricing / risk / permissions |
+| 🔎 **Catalog** | <https://catalog.extenshi.io> — search 343k+ extensions, filter by store / category / pricing / risk / permissions |
 | 📚 **Docs** | <https://docs.extenshi.io> — product guides + full CLI reference |
 | ✍️ **Blog** | <https://blog.extenshi.io> — deep dives on extension security & the ecosystem |
 | 🟢 **Status** | <https://status.extenshi.io> — live uptime for every public service |
@@ -39,7 +39,7 @@ backend with your own API key — there's nothing to host.
 
 | Tool | Install | What it does |
 |---|---|---|
-| **`@extenshi/cli`** | `npx @extenshi/cli@latest` | **Security scanner**, **store-review predictor**, **icon toolbar preview**, and **multi-store publisher** for `.zip` / `.crx` / `.xpi` artifacts. Runs in CI. |
+| **`@extenshi/cli`** | `npx @extenshi/cli@latest` | **Security scanner**, **store-review predictor**, **icon toolbar preview**, **bulk safety lookup** for extensions you already have, and **multi-store publisher** for `.zip` / `.crx` / `.xpi` artifacts. Runs in CI. |
 | **`@extenshi/mcp`** | `npx @extenshi/mcp@latest` | **MCP server** that brings the catalog + scanning into Claude, Cursor, and other AI tools. |
 
 → [**Full CLI command reference**](./tools/extenshi-cli/) — every command and flag
@@ -47,14 +47,19 @@ backend with your own API key — there's nothing to host.
 → [**Agent skills**](./skills/) — free `SKILL.md` files your coding agent can pick up
 → [**tools/**](./tools/) — setup for both npm packages
 
-Most of the CLI is **free and offline** — only `scan` spends a credit:
+Most of the CLI is **free and offline** — only `scan` and `risk` spend credits:
 
 ```bash
 npx @extenshi/cli@latest icon preview ./icon.svg --name "My Extension"   # free, offline
 npx @extenshi/cli@latest review-risk ./dist/my-extension.zip             # free, offline
 npx @extenshi/cli@latest publish ./dist/my-extension.zip                 # free, your own store creds
 npx @extenshi/cli@latest scan ./dist/my-extension.zip                    # 1 scan credit
+npx @extenshi/cli@latest risk --file ./installed.txt                     # 1 read credit per 40 ids
 ```
+
+Run it with **`@latest`** every time — that's what keeps you on the current
+scanner rules. A bare `npx @extenshi/cli` re-runs your npx cache, and a global
+install pins whatever version you last remembered to upgrade.
 
 ```jsonc
 // Add the catalog to any MCP client (Claude Code / Desktop / Cursor):
@@ -81,9 +86,9 @@ Everything in this list works without signing up. Bookmark what's useful.
 
 | | |
 |---|---|
-| `extenshi icon preview <icon>` | Your icon at 16 px in real Chrome / Firefox / Edge toolbars, contrast + canvas checks, PNG & ZIP export. Fully offline. [See the output →](./examples/) |
-| `extenshi review-risk <artifact>` | Predicts the store review: what gets **rejected**, what causes **user attrition** on update, what triggers a **slow** manual review. Fully offline. |
-| `extenshi publish <artifact>` | Publishes to Chrome / Firefox / Edge with *your own* store credentials — uploads go straight from your machine to the stores. |
+| `npx @extenshi/cli@latest icon preview <icon>` | Your icon at 16 px in real Chrome / Firefox / Edge toolbars, contrast + canvas checks, PNG & ZIP export. Fully offline. [See the output →](./examples/) |
+| `npx @extenshi/cli@latest review-risk <artifact>` | Predicts the store review: what gets **rejected**, what causes **user attrition** on update, what triggers a **slow** manual review. Fully offline. |
+| `npx @extenshi/cli@latest publish <artifact>` | Publishes to Chrome / Firefox / Edge with *your own* store credentials — uploads go straight from your machine to the stores. |
 
 **For your coding agent:**
 
@@ -101,7 +106,7 @@ Everything in this list works without signing up. Bookmark what's useful.
 | [Manifest generator](https://extenshi.io/manifest-generator) | Build a valid MV3 `manifest.json` |
 | [Icon generator & toolbar preview](https://extenshi.io/icon-generator) | The same preview as the CLI, in the browser |
 | [Privacy-policy generator](https://extenshi.io/policy-generator) | A store-acceptable privacy policy for your extension |
-| [Catalog search](https://catalog.extenshi.io) | 324k+ extensions across three stores, with risk ratings |
+| [Catalog search](https://catalog.extenshi.io) | 343k+ extensions across three stores, with risk ratings |
 | [Methodology](https://docs.extenshi.io/methodology) | How the scanning and risk scoring actually work — and their limits |
 
 **Open data:** the [research reports](#-public-research) below are CC BY 4.0.

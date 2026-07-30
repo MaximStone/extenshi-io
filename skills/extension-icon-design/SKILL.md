@@ -12,7 +12,7 @@ description: >
 
 Design an icon for a browser extension, verify it inside realistic browser
 toolbars, and export the store-ready PNG set — fully local and free. The only
-external tool used is `npx @extenshi/cli icon preview`, which runs offline,
+external tool used is `npx @extenshi/cli@latest icon preview`, which runs offline,
 needs no account, and sends nothing anywhere.
 
 ## What the stores need
@@ -56,7 +56,7 @@ that, not for the 128 px store tile:
 3. **Render the verification page** (offline, free):
 
    ```bash
-   npx @extenshi/cli icon preview icon.svg --name "Extension Name"
+   npx @extenshi/cli@latest icon preview icon.svg --name "Extension Name"
    ```
 
    It opens a self-contained HTML page: the icon pinned inside Chrome /
@@ -92,6 +92,6 @@ that, not for the 128 px store tile:
 ## Going further (optional)
 
 The same CLI can check the rest of the release, also without an account:
-`npx @extenshi/cli review-risk dist.zip` predicts Chrome Web Store review
+`npx @extenshi/cli@latest review-risk dist.zip` predicts Chrome Web Store review
 outcomes offline. Docs and the full command reference:
 https://docs.extenshi.io/developers/icon-generator

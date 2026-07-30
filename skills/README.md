@@ -26,7 +26,7 @@ inside the repo and commit it, so everyone's agent gets it.
 
 Then just ask: *"make an icon for my extension and show me how it looks in the
 browser toolbar"*. The agent draws the SVG, renders the verification page with
-[`extenshi icon preview`](../tools/extenshi-cli/#extenshi-icon-preview-icon),
+[`npx @extenshi/cli@latest icon preview`](../tools/extenshi-cli/#extenshi-icon-preview-icon),
 iterates with you on the warnings, and exports the store set — no API key,
 nothing leaves your machine.
 

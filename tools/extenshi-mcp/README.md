@@ -15,8 +15,9 @@ enforces it too.
 
 1. Sign up at **https://auth.extenshi.io/signup**
 2. Create a key at **https://dojo.extenshi.io/api-keys**
-3. Provide it via the `EXTENSHI_API_KEY` environment variable (or run `extenshi login`,
-   which the MCP server reads from `~/.extenshi/config.json`).
+3. Provide it via the `EXTENSHI_API_KEY` environment variable (or run
+   `npx @extenshi/cli@latest login`, which the MCP server reads from
+   `~/.extenshi/config.json`).
 
 ## Configure your MCP client
 
@@ -40,10 +41,12 @@ enforces it too.
 | `get_extension` | Full catalog detail for one extension — by numeric catalog ID **or** by its store id (see below) | 1 read |
 | `get_reviews` | Paginated Firefox/Edge user reviews (rating, short excerpt, date, language) + a store-level aggregate (rating, count, reviews link) — Chrome Web Store review rows excluded (aggregate is the only public content for Chrome); reviewer identity omitted; sort by recent or rating | 1 read |
 | `get_security` | Risk score + finding counts + top grouped findings (reads existing scans) | 3 reads |
+| `get_risk_by_store_ids` | Safety scores for **up to 40** extensions in one call, by store id — for auditing a list of installed extensions instead of calling `get_security` per extension | 1 read per call |
 | `market_overview` | Catalog-wide market intelligence with no args (totals, store split, category tree, and the extended breakdown — MV2/MV3, sensitive permissions, risk tiers, trader status, recency, reviews); pass a `query` to scope facets to a search | 1 read |
 | `get_credit_balance` | Remaining credits across every pool (read / scan / icon / inventory), so an agent can size a batch before running it instead of hitting a mid-batch limit | Free |
 | `search_docs` | Search the Extenshi docs + `@extenshi/cli` reference so the assistant can quote exact commands | Free (no key) |
-| `generate_icon_workflow` | Icon design requirements + the local agent-draws-SVG → `extenshi icon preview` → export workflow | Free (no key) |
+| `generate_icon_workflow` | Icon design requirements + the local agent-draws-SVG → `npx @extenshi/cli@latest icon preview` → export workflow | Free (no key) |
+| `generate_welcome_page_workflow` | Design brief for the post-install welcome page: the one action it must drive, which illustrations to produce, where to place click markers, and the block JSON to return | Free (no key) |
 | `scan_extension` | Pre-publish security scan of a local artifact (.zip/.crx/.xpi), with live progress | 1 scan |
 | `publish_extension` | Publish to Chrome/Firefox/Edge with your own store credentials (fully local) | Free |
 

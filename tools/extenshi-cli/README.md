@@ -3,40 +3,69 @@
 [![npm](https://img.shields.io/npm/v/@extenshi/cli)](https://www.npmjs.com/package/@extenshi/cli)
 
 The Extenshi CLI is a command-line tool for browser-extension developers. It runs
-a **pre-publish security scan**, **predicts Chrome Web Store review outcomes**
-before you submit, **previews your icon** inside real browser toolbars, and
-**publishes** a build straight to Chrome, Firefox, and Edge from your machine.
+a **pre-publish security scan**, **predicts store review outcomes** before you
+submit, **looks up the safety score of extensions you already have**, **previews
+your icon** inside real browser toolbars, and **publishes** a build straight to
+Chrome, Firefox, and Edge from your machine.
 
-Requires **Node 20+**. Nothing to self-host.
+Requires **Node 20+**. Nothing to self-host, nothing to install.
+
+---
+
+## Run it
+
+Every example in this file is copy-pasteable as-is:
 
 ```bash
-npx @extenshi/cli@latest scan ./dist/my-extension.zip
+npx @extenshi/cli@latest --help
 ```
 
-The examples below use the shorthand `extenshi`. Alias it so every run still
-pulls the newest published version — there is no global install to upgrade:
+**Always include `@latest`.** It is the difference between running the current
+CLI and running whatever happened to land in your npx cache months ago:
+
+- `npx @extenshi/cli@latest` — npm re-resolves the newest published version on
+  every run, so you pick up new checks and new scanner rules for free.
+- `npx @extenshi/cli` — reuses the cached copy. Silently stale.
+- `npm i -g @extenshi/cli` — pins the version you installed. Stale until you
+  remember to re-run `npm i -g`, and once it falls a **major** version behind,
+  the CLI refuses to run and tells you to upgrade.
+
+If typing that gets old, alias it — you still get a fresh version every run:
 
 ```bash
 alias extenshi="npx @extenshi/cli@latest"
 ```
 
+For readability the option tables below refer to commands as
+`extenshi <command>`; assume that alias, or paste the full `npx` form shown in
+each example block.
+
 ---
 
-## What's free
+## What it costs
 
-Most of the CLI needs **no account and no network**. Only `scan` spends credits.
+Most of the CLI needs **no account and no network**. Two commands spend credits:
+`scan` (a scan credit) and `risk` (a read credit).
 
-| Command | Needs an API key? | Runs offline? |
+| Command | Credits | Network |
 | --- | --- | --- |
-| `extenshi icon preview <icon>` | **No** | ✅ fully local |
-| `extenshi review-risk <artifact>` | **No** | ✅ local (optional catalog diff if you pass `--extension-id`) |
-| `extenshi publish <artifact>` | **No** (your own store credentials) | Uploads go straight to the store APIs |
-| `extenshi login` | — | ✅ local |
-| `extenshi scan <artifact>` | Yes — **1 scan credit** | Uploads the artifact to the scan backend |
+| `extenshi icon preview <icon>` | **Free**, no API key | ✅ none — fully offline |
+| `extenshi review-risk <artifact>` | **Free**, no API key | ✅ none, unless you pass `--extension-id` — that reads your last published manifest from the catalog, also free |
+| `extenshi publish <artifact>` | **Free**, no Extenshi key | Uploads go straight from your machine to the store APIs |
+| `extenshi login` | **Free** | ✅ none — writes the key to disk |
+| `extenshi risk [store-ids…]` | **1 read credit per call**, up to 40 extensions per call | Catalog read |
+| `extenshi scan <artifact>` | **1 scan credit** | Uploads the artifact to the scan backend |
 
-Every account includes a free allowance to try things out. Create a key at
-[dojo.extenshi.io/api-keys](https://dojo.extenshi.io/api-keys); metering is
-documented at [docs.extenshi.io/developers/scan-credits](https://docs.extenshi.io/developers/scan-credits).
+Every account starts with a **one-time free allowance — 10 reads and 3 scans**
+(there is no monthly reset). Beyond it, prepaid credit packs **never expire**.
+Create a key at [dojo.extenshi.io/api-keys](https://dojo.extenshi.io/api-keys),
+check your balance at [dojo.extenshi.io/billing](https://dojo.extenshi.io/billing),
+and see [docs.extenshi.io/developers/scan-credits](https://docs.extenshi.io/developers/scan-credits)
+for how metering works.
+
+> Free **scan** credits are reserved for extensions you own: pass
+> `--extension-id <id>` for an extension you've verified on the Ownership tab in
+> dojo. Paid scan credits work on any artifact.
 
 ---
 
@@ -46,12 +75,13 @@ documented at [docs.extenshi.io/developers/scan-credits](https://docs.extenshi.i
 | --- | --- |
 | [`scan <artifact>`](#extenshi-scan-artifact) | Pre-publish security scan of a `.crx` / `.xpi` / `.zip`, with an HTML report |
 | [`review-risk <artifact>`](#extenshi-review-risk-artifact) | Predict store review outcomes: REJECTED / ATTRITION / SLOW |
+| [`risk [store-ids…]`](#extenshi-risk-store-ids) | Safety scores for extensions that are already published, in bulk, by store id |
 | [`icon preview <icon>`](#extenshi-icon-preview-icon) | Render an icon inside Chrome / Firefox / Edge toolbars, with contrast checks + PNG/ZIP export |
 | [`publish <artifact>`](#extenshi-publish-artifact) | Upload a build to Chrome, Firefox, and/or Edge with your own store credentials |
 | [`login`](#extenshi-login) | Save your API key to `~/.extenshi/config.json` |
 
-`extenshi --help` and `extenshi <command> --help` print the same information
-from the installed version.
+`npx @extenshi/cli@latest --help` and `… <command> --help` print the same
+information from the version you're actually running.
 
 ---
 
@@ -64,7 +94,7 @@ prediction (the same checks as `review-risk`) is folded into the report unless
 you opt out.
 
 ```bash
-extenshi scan ./dist/my-extension.zip
+npx @extenshi/cli@latest scan ./dist/my-extension.zip
 ```
 
 📄 **See the output:** [`examples/scan-report.html`](../../examples/) — plus the
@@ -102,6 +132,9 @@ readable months later.
     EXTENSHI_API_KEY: ${{ secrets.EXTENSHI_API_KEY }}
 ```
 
+`@latest` matters most here: a pinned CI install quietly stops picking up new
+scanner rules, which is the whole reason the step exists.
+
 When `CI` is set, the HTML report is still written (so the job can archive it)
 but never opened. A non-zero exit code means the scan **failed to run** — parse
 the JSON for the actual findings and decide your own failure threshold.
@@ -125,10 +158,11 @@ consequence:
   until they re-grant a permission;
 - **TRIGGERS SLOW REVIEW** — nothing fatal, but it routes you into manual review.
 
-Runs fully offline against the artifact's manifest. **No API key, no upload.**
+Runs fully offline against the artifact's manifest. **No API key, no upload, no
+credits.**
 
 ```bash
-extenshi review-risk ./dist/my-extension.zip
+npx @extenshi/cli@latest review-risk ./dist/my-extension.zip
 ```
 
 | Option | Description |
@@ -140,6 +174,40 @@ extenshi review-risk ./dist/my-extension.zip
 
 ---
 
+## `extenshi risk [store-ids…]`
+
+Looks up the **safety score of extensions that are already published** — by the
+store id in their URL, not from a local artifact. Built for inventories: audit
+what your team has installed, or size up a list of competitors.
+
+```bash
+# a couple of Chrome ids (the id in the store URL):
+npx @extenshi/cli@latest risk hdokiejnpimakedhajhdlcegeplioahd nngceckbapebfimnlniiiahkandclblb
+
+# a whole inventory from a file, one id per line:
+npx @extenshi/cli@latest risk --file ./installed.txt --json
+
+# mixed stores — a per-id prefix overrides --store:
+npx @extenshi/cli@latest risk firefox:my-addon-slug hdokiejnpimakedhajhdlcegeplioahd
+```
+
+**Up to 40 extensions per call, and the whole call costs 1 read credit** — not
+one per extension. Looking the same extensions up one at a time costs 3 reads
+each, so an 87-extension inventory is 3 credits here instead of 261. Scores are
+cluster-resolved server-side, so they match what the extension's catalog page
+shows.
+
+Requires an API key (`npx @extenshi/cli@latest login` or `EXTENSHI_API_KEY`).
+
+| Option | Description |
+| --- | --- |
+| `--store <chrome\|firefox\|edge>` | Store the ids belong to (default: `chrome`). A per-id prefix like `firefox:some-addon` overrides it. |
+| `--file <path>` | Read ids from a file instead of (or in addition to) the arguments: one per line, bare id or `store:id`. Blank lines and `#` comments are ignored. |
+| `--catalog-url <url>` | Override the catalog API base URL (default: `https://bff.extenshi.io`). |
+| `--json` | Output raw JSON. |
+
+---
+
 ## `extenshi icon preview <icon>`
 
 Renders a local `.svg` or `.png` icon **inside realistic browser toolbar
@@ -148,7 +216,7 @@ neighbor extensions, on light *and* dark toolbars. Writes one self-contained HTM
 file and opens it. **Fully offline, no API key, nothing leaves your machine.**
 
 ```bash
-extenshi icon preview ./icon.svg --name "My Extension"
+npx @extenshi/cli@latest icon preview ./icon.svg --name "My Extension"
 ```
 
 📄 **See the output:** [`examples/icon-preview.html`](../../examples/)
@@ -187,7 +255,7 @@ the artifact and your store credentials never touch Extenshi servers, so no
 Extenshi API key is required.
 
 ```bash
-extenshi publish ./dist/my-extension.zip --stores chrome,edge
+npx @extenshi/cli@latest publish ./dist/my-extension.zip --stores chrome,edge
 ```
 
 | Option | Description |
@@ -209,26 +277,28 @@ set for each store you target:
 | Firefox | `FIREFOX_ADDON_GUID`, `FIREFOX_JWT_ISSUER`, `FIREFOX_JWT_SECRET` |
 | Edge | `EDGE_PRODUCT_ID`, `EDGE_CLIENT_ID`, `EDGE_CLIENT_SECRET`, `EDGE_TENANT_ID` |
 
-Run `extenshi publish <artifact> --validate` first to confirm which stores are
-configured. The recommended flow is scan, then publish:
+Confirm which stores are configured before you ship, then scan and publish:
 
 ```bash
-extenshi scan dist.zip && extenshi publish dist.zip
+npx @extenshi/cli@latest publish ./dist/my-extension.zip --validate
+npx @extenshi/cli@latest scan ./dist/my-extension.zip && \
+  npx @extenshi/cli@latest publish ./dist/my-extension.zip
 ```
 
 > Publishing is in an active testing phase — access is gated. Sign in with
-> `extenshi login` so the access check can recognize your account.
+> `npx @extenshi/cli@latest login` so the access check can recognize your account.
 
 ---
 
 ## `extenshi login`
 
-Saves your API key to `~/.extenshi/config.json`, where `scan` and the
-[MCP server](../extenshi-mcp/) both read it from.
+Saves your API key to `~/.extenshi/config.json`, where `scan`, `risk`, and the
+[MCP server](../extenshi-mcp/) all read it from. Purely local — nothing is sent
+anywhere. The file persists between `npx` runs, so you only do this once.
 
 ```bash
-extenshi login                      # interactive prompt
-extenshi login --api-key ek_…       # non-interactive
+npx @extenshi/cli@latest login                      # interactive prompt
+npx @extenshi/cli@latest login --api-key ek_…       # non-interactive
 ```
 
 | Option | Description |
@@ -245,7 +315,7 @@ The key can also come from `EXTENSHI_API_KEY` in the environment or a local
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `EXTENSHI_API_KEY` | — | Your `ek_…` developer key (only `scan` requires it) |
+| `EXTENSHI_API_KEY` | — | Your `ek_…` developer key (required by `scan` and `risk`) |
 | `EXTENSHI_API_URL` | `https://scan.extenshi.io` | Scan backend base URL |
 | `EXTENSHI_BFF_URL` | `https://bff.extenshi.io` | Catalog read API base URL |
 | `CI` | — | When set, the HTML report is written but not opened |
