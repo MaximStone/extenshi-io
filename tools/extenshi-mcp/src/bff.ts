@@ -66,6 +66,15 @@ export interface Bff {
 		storeId: string
 		store?: 'CHROME' | 'FIREFOX' | 'EDGE'
 	}): Promise<ExtensionRef | null>
+	/**
+	 * Risk for MANY extensions addressed by store id, in ONE metered read.
+	 * Cluster-resolved server-side, so each row describes the same listing the
+	 * extension page renders. Capped at 40 extensions per call for metered
+	 * callers — the BFF rejects a larger batch with a message naming the limit.
+	 */
+	getSecuritySummaryBatch(input: {
+		extensions: Array<{ storeId: string; store: 'CHROME' | 'FIREFOX' | 'EDGE' }>
+	}): Promise<unknown>
 }
 
 /** Build a BFF client from a static `ek_…` key (stdio path). */
@@ -103,5 +112,6 @@ export function makeBffWithAuth(bffUrl: string, authHeader: () => string | Promi
 		getCategoryTree: () => client.catalog.getCategoryTree.query(),
 		getApiCallerBalance: () => client.cli.getApiCallerBalance.query(),
 		resolveExtensionRef: (input) => client.catalog.resolveExtensionRef.query(input),
+		getSecuritySummaryBatch: (input) => client.security.getSecuritySummaryBatch.query(input),
 	}
 }

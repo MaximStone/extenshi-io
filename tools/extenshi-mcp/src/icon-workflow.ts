@@ -44,7 +44,7 @@ Extenshi CLI renders an offline verification page. No API key, no credits, no up
 2. **Render the verification page** (free, offline):
 
    \`\`\`bash
-   npx @extenshi/cli icon preview ${iconFile} --name "${name}"
+   npx @extenshi/cli@latest icon preview ${iconFile} --name "${name}"
    \`\`\`
 
    This writes a self-contained HTML file and opens it: Chrome / Firefox / Edge toolbar

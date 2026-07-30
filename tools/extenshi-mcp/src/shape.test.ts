@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { shapeExtension, shapeInstallDialog, shapeReviews, shapeSearch, shapeSecurity } from './shape.js'
+import {
+	shapeExtension,
+	shapeInstallDialog,
+	shapeReviews,
+	shapeSearch,
+	shapeSecurity,
+	shapeStoreRiskBatch,
+} from './shape.js'
 
 // Mirrors the `installDialogPreview` shape catalog-api attaches to
 // getExtensionById (see shared-types/permission-warnings.ts → InstallDialogPreview).
@@ -231,5 +238,97 @@ describe('shapeReviews', () => {
 		)
 		expect(JSON.stringify(out)).not.toContain('Jane')
 		expect(JSON.stringify(out)).not.toContain('x.png')
+	})
+})
+
+// A row as catalog-api returns it for a clustered extension: the store id
+// belongs to the Chrome member (295111), but the score describes the cluster
+// canonical (the Edge record 1116) — which is what the extension page renders.
+const clusteredRow = {
+	storeId: 'nkbihfbeogaeaoehlefnkodbefgpgknn',
+	store: 'CHROME',
+	extensionId: 295111,
+	canonicalExtensionId: 1116,
+	scoredExtensionId: 1116,
+	scoredStore: 'EDGE',
+	extensionName: 'MetaMask',
+	riskCategory: 'CRITICAL',
+	riskScore: 80.47,
+	severityBreakdown: { critical: 3, high: 5, medium: 0, low: 1, info: 0, review_required: 0 },
+	totalFindings: 9,
+	lastScanDate: '2026-07-27T10:59:48.099Z',
+}
+
+describe('shapeStoreRiskBatch', () => {
+	it('publishes the website safety coefficient, not the raw risk score', () => {
+		// The backend stores RISK (0 = safest). Passing it straight through would
+		// make the MCP answer contradict the extension page by construction.
+		const out = shapeStoreRiskBatch([clusteredRow], [{ storeId: clusteredRow.storeId, store: 'CHROME' }])
+		const row = (out.extensions as Record<string, unknown>[])[0]
+		expect(row.safetyScore).toBeCloseTo(19.53, 2)
+		expect(row.riskCategory).toBe('CRITICAL')
+	})
+
+	it('links to the CANONICAL catalog page, so the URL matches the score', () => {
+		const out = shapeStoreRiskBatch([clusteredRow], [{ storeId: clusteredRow.storeId, store: 'CHROME' }])
+		const row = (out.extensions as Record<string, unknown>[])[0]
+		expect(row.extensionId).toBe(1116)
+		expect(row.catalogUrl).toBe('https://catalog.extenshi.io/extensions/1116')
+	})
+
+	it('names the store variant the score was measured on', () => {
+		// Cluster members are scanned independently and disagree, so an agent
+		// reporting this number must be able to say which listing it describes.
+		const out = shapeStoreRiskBatch([clusteredRow], [{ storeId: clusteredRow.storeId, store: 'CHROME' }])
+		const row = (out.extensions as Record<string, unknown>[])[0]
+		expect(row.scoredStore).toBe('EDGE')
+		expect(row.scoredVariantId).toBe(1116)
+	})
+
+	it('omits the variant labels when the score is this listing’s own', () => {
+		const own = {
+			...clusteredRow,
+			canonicalExtensionId: 295111,
+			scoredExtensionId: 295111,
+			scoredStore: 'CHROME',
+		}
+		const out = shapeStoreRiskBatch([own], [{ storeId: own.storeId, store: 'CHROME' }])
+		const row = (out.extensions as Record<string, unknown>[])[0]
+		expect(row.scoredStore).toBeUndefined()
+		expect(row.scoredVariantId).toBeUndefined()
+	})
+
+	it('marks an unscanned extension rather than implying it is safe', () => {
+		const unscanned = { ...clusteredRow, riskCategory: null, riskScore: null, totalFindings: null }
+		const out = shapeStoreRiskBatch([unscanned], [{ storeId: unscanned.storeId, store: 'CHROME' }])
+		const row = (out.extensions as Record<string, unknown>[])[0]
+		expect(row.scanned).toBe(false)
+		expect(row.safetyScore).toBeUndefined()
+	})
+
+	it('reports which requested ids the catalog has no listing for', () => {
+		// "Not in the catalog" and "safe" must never look the same to an agent.
+		const out = shapeStoreRiskBatch(
+			[clusteredRow],
+			[
+				{ storeId: clusteredRow.storeId, store: 'CHROME' },
+				{ storeId: 'neverscraped', store: 'EDGE' },
+			],
+		)
+		expect(out.requested).toBe(2)
+		expect(out.matched).toBe(1)
+		expect(out.notInCatalog).toEqual([{ storeId: 'neverscraped', store: 'EDGE' }])
+		expect(String(out.note)).toMatch(/NOT a safety verdict/)
+	})
+
+	it('says nothing about missing ids when everything resolved', () => {
+		const out = shapeStoreRiskBatch([clusteredRow], [{ storeId: clusteredRow.storeId, store: 'CHROME' }])
+		expect(out.notInCatalog).toBeUndefined()
+		expect(out.note).toBeUndefined()
+	})
+
+	it('survives a drifted payload instead of throwing', () => {
+		expect(() => shapeStoreRiskBatch(null, [])).not.toThrow()
+		expect(() => shapeStoreRiskBatch(['nonsense'], [])).not.toThrow()
 	})
 })

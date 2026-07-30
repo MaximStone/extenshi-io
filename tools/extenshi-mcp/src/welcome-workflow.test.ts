@@ -4,11 +4,17 @@ import { buildWelcomeAgentBrief, WELCOME_GOAL_PRESETS } from './welcome-agent-br
 import { CONSTRUCTOR_URL, renderWelcomeWorkflow } from './welcome-workflow.js'
 
 describe('synced copy of welcome-agent-brief', () => {
-	it('is byte-identical to the canonical shared-types file', () => {
+	// Gate on the shared-types workspace being present, NOT on the file itself.
+	// shared-types is absent when this package is extracted standalone (the npm
+	// tarball, and the isolated copy mirror-mcp.yml builds), so there the test
+	// skips — reported as a skip rather than passing vacuously. Inside the
+	// monorepo it always runs, so renaming or moving welcome-agent-brief.ts fails
+	// here instead of silently retiring the guard.
+	const sharedTypes = new URL('../../../shared-types/package.json', import.meta.url)
+	const inMonorepo = fs.existsSync(sharedTypes)
+
+	it.skipIf(!inMonorepo)('is byte-identical to the canonical shared-types file', () => {
 		const canonical = new URL('../../../shared-types/welcome-agent-brief.ts', import.meta.url)
-		// shared-types is absent from the published npm tarball — only enforce
-		// the sync inside the monorepo checkout (i.e. in CI).
-		if (!fs.existsSync(canonical)) return
 		const copy = new URL('./welcome-agent-brief.ts', import.meta.url)
 		expect(fs.readFileSync(copy, 'utf8')).toBe(fs.readFileSync(canonical, 'utf8'))
 	})

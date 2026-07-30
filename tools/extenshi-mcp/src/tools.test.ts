@@ -9,12 +9,20 @@
  * See internal-docs/plans/2026-06-25-claude-connector-directory.md §13 #1.
  */
 
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { UserError } from 'fastmcp'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bff } from './bff.js'
 import { scanArtifact } from './scan.js'
 import { captureError, captureEvent } from './telemetry.js'
-import { type Capability, isExpectedError, registerTools, type ToolDeps } from './tools.js'
+import {
+	type Capability,
+	isExpectedError,
+	MAX_BATCH_EXTENSIONS,
+	registerTools,
+	type ToolDeps,
+} from './tools.js'
 
 // The `instrument` wrapper fires telemetry on every execute; stub the capture
 // sinks so the execute-level tests below never spin up a real PostHog client.
@@ -82,6 +90,7 @@ const READ_TOOLS = [
 	'get_extension',
 	'get_reviews',
 	'get_security',
+	'get_risk_by_store_ids',
 	'market_overview',
 	'get_credit_balance',
 ]
@@ -89,14 +98,14 @@ const DOCS_TOOLS = ['search_docs', 'generate_icon_workflow', 'generate_welcome_p
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 11 tools', () => {
+	it('stdio (all capabilities) registers all 12 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(11)
+		expect(names).toHaveLength(12)
 	})
 
-	it('remote (read + docs only) registers the 9 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 10 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
@@ -446,7 +455,7 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(11)
+		expect(tools).toHaveLength(12)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')
@@ -636,7 +645,9 @@ describe('generate_icon_workflow execute', () => {
 			execute: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<string>
 		}
 		const out = await tool.execute({ extension_name: 'Tab Keeper' }, {})
-		expect(out).toContain('icon preview icon.svg --name "Tab Keeper"')
+		// Pin the FULL invocation, `@latest` included: agents run this command verbatim, and
+		// a bare `npx @extenshi/cli` silently reuses whatever is in their npx cache.
+		expect(out).toContain('npx @extenshi/cli@latest icon preview icon.svg --name "Tab Keeper"')
 		expect(out).toContain('16, 32, 48 and 128 px')
 		expect(out).toContain('No API key')
 	})
@@ -648,6 +659,103 @@ describe('generate_icon_workflow execute', () => {
 			execute: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<string>
 		}
 		const out = await tool.execute({}, {})
-		expect(out).toContain('--name "My Extension"')
+		expect(out).toContain('npx @extenshi/cli@latest icon preview icon.svg --name "My Extension"')
+	})
+})
+
+describe('get_risk_by_store_ids', () => {
+	function registerWith(stubBff: Bff) {
+		const tools: Record<string, any> = {}
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+		return tools
+	}
+
+	it('maps snake_case store_id to the BFF storeId input', async () => {
+		const calls: Record<string, unknown>[] = []
+		const tools = registerWith({
+			getSecuritySummaryBatch: (input: Record<string, unknown>) => {
+				calls.push(input)
+				return Promise.resolve([])
+			},
+		} as unknown as Bff)
+
+		await tools.get_risk_by_store_ids.execute(
+			{
+				extensions: [
+					{ store_id: 'abc', store: 'CHROME' },
+					{ store_id: 'ublock-origin', store: 'FIREFOX' },
+				],
+			},
+			{},
+		)
+
+		expect(calls).toEqual([
+			{
+				extensions: [
+					{ storeId: 'abc', store: 'CHROME' },
+					{ storeId: 'ublock-origin', store: 'FIREFOX' },
+				],
+			},
+		])
+	})
+
+	it('rejects a batch over the cap before it reaches the network', () => {
+		// The BFF enforces the real limit; the tool schema states it so an agent
+		// is told up front rather than discovering it as a round-tripped error.
+		const tools = registerWith({} as unknown as Bff)
+		const schema = tools.get_risk_by_store_ids.parameters
+		const tooMany = {
+			extensions: Array.from({ length: MAX_BATCH_EXTENSIONS + 1 }, (_, i) => ({
+				store_id: `id${i}`,
+				store: 'CHROME' as const,
+			})),
+		}
+		expect(schema.safeParse(tooMany).success).toBe(false)
+		expect(schema.safeParse({ extensions: tooMany.extensions.slice(0, MAX_BATCH_EXTENSIONS) }).success).toBe(
+			true,
+		)
+	})
+
+	it('requires an explicit store — Chrome and Edge ids are indistinguishable', () => {
+		const tools = registerWith({} as unknown as Bff)
+		const schema = tools.get_risk_by_store_ids.parameters
+		expect(schema.safeParse({ extensions: [{ store_id: 'abc' }] }).success).toBe(false)
+	})
+
+	it('tells the agent the cap and the per-call credit cost', () => {
+		const tools = registerWith({} as unknown as Bff)
+		const description: string = tools.get_risk_by_store_ids.description
+		expect(description).toContain(String(MAX_BATCH_EXTENSIONS))
+		expect(description).toMatch(/1 read credit/i)
+	})
+
+	// Cross-package sync point: this package is published to npm and mirrored to
+	// a public repo, so it cannot import from catalog-bff — the constants are kept
+	// in step by reading the source. The BFF is what actually rejects an over-cap
+	// request.
+	//
+	// The gate is the catalog-bff workspace being present, NOT the file itself.
+	// Outside the monorepo (the npm tarball, and the isolated copy that
+	// .github/workflows/mirror-mcp.yml builds to prove the package stands alone)
+	// there is nothing to compare against, so the test skips — visibly, as a
+	// reported skip. Inside the monorepo it always runs, so renaming or moving
+	// metered-batch-cap.ts fails here instead of silently retiring the guard.
+	const bffLib = join(__dirname, '..', '..', '..', 'catalog', 'catalog-bff', 'src', 'lib')
+	const inMonorepo = existsSync(join(__dirname, '..', '..', '..', 'catalog', 'catalog-bff', 'package.json'))
+
+	it.skipIf(!inMonorepo)('matches METERED_BATCH_MAX_EXTENSIONS in the BFF, which is the authority', () => {
+		const bffSource = readFileSync(join(bffLib, 'metered-batch-cap.ts'), 'utf8')
+		const match = bffSource.match(/METERED_BATCH_MAX_EXTENSIONS\s*=\s*(\d+)/)
+		expect(match, 'METERED_BATCH_MAX_EXTENSIONS not found in catalog-bff').not.toBeNull()
+		expect(Number(match?.[1])).toBe(MAX_BATCH_EXTENSIONS)
 	})
 })

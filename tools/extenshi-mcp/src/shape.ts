@@ -322,3 +322,83 @@ export function shapeSecurity(security: unknown, riskSummary: unknown, installDi
 	}
 	return out
 }
+
+/** The catalog URL an agent can hand the developer for a given catalog id. */
+const CATALOG_EXTENSION_URL = 'https://catalog.extenshi.io/extensions/'
+
+/**
+ * Shape one row of `security.getSecuritySummaryBatch` for the risk-by-store-id
+ * tool.
+ *
+ * Two things this deliberately does NOT hide:
+ *  - `scoredStore` / `scoredVariantId` — the batch resolves a store id through
+ *    its cross-store cluster to the record the extension page renders, and
+ *    cluster members are scanned independently (the same extension scored 78.55
+ *    HIGH on its Chrome record and 80.47 CRITICAL on its Edge one). An agent
+ *    reporting a number to a developer must be able to say which listing it
+ *    describes.
+ *  - a `null` score — "not scanned" is an expected state, not an error, and
+ *    must never be flattened into a reassuring 100.
+ *
+ * `catalogUrl` uses the CANONICAL id so the link lands on the page the score
+ * came from without a redirect hop.
+ */
+export function shapeStoreRiskRow(row: unknown): Obj {
+	if (!isObj(row)) return { value: compact(row) }
+	const canonicalId =
+		typeof row.canonicalExtensionId === 'number' ? row.canonicalExtensionId : row.extensionId
+	const scored = row.scoredExtensionId
+	return prune({
+		storeId: row.storeId,
+		store: row.store,
+		name: row.extensionName,
+		extensionId: canonicalId,
+		catalogUrl: typeof canonicalId === 'number' ? `${CATALOG_EXTENSION_URL}${canonicalId}` : undefined,
+		safetyScore: toSafetyScore(row.riskScore),
+		riskCategory: row.riskCategory,
+		severityBreakdown: isObj(row.severityBreakdown) ? row.severityBreakdown : undefined,
+		totalFindings: row.totalFindings ?? undefined,
+		lastScanDate: row.lastScanDate,
+		// Only worth the tokens when the score came from a DIFFERENT listing
+		// than the one the caller asked about — that is the case an agent must
+		// not silently paper over.
+		//
+		// NB the asymmetry, which is deliberate: the emitted `extensionId` above
+		// is the CANONICAL id (it is what the catalog URL needs), but the test
+		// here is against the raw `row.extensionId` — the MEMBER that owns the
+		// store id the caller passed in. "Did the score come from the listing I
+		// asked about?" is a question about the member, so comparing against the
+		// canonical would suppress the label on exactly the clustered rows that
+		// need it.
+		scoredStore: typeof scored === 'number' && scored !== row.extensionId ? row.scoredStore : undefined,
+		scoredVariantId: typeof scored === 'number' && scored !== row.extensionId ? scored : undefined,
+		scanned: row.riskCategory == null ? false : undefined,
+	})
+}
+
+/**
+ * Shape a whole risk-by-store-id batch, and say which requested ids the catalog
+ * had no listing for — an agent that cannot tell "safe" from "unknown" will
+ * report the wrong thing.
+ */
+export function shapeStoreRiskBatch(
+	rows: unknown,
+	requested: Array<{ storeId: string; store: string }>,
+): Obj {
+	const list = Array.isArray(rows) ? rows : []
+	const found = new Set(list.filter(isObj).map((row) => `${String(row.store)}:${String(row.storeId)}`))
+	const notFound = requested
+		.filter((ref) => !found.has(`${ref.store}:${ref.storeId}`))
+		.map((ref) => ({ storeId: ref.storeId, store: ref.store }))
+
+	return prune({
+		requested: requested.length,
+		matched: list.length,
+		extensions: list.map(shapeStoreRiskRow),
+		notInCatalog: notFound.length > 0 ? notFound : undefined,
+		note:
+			notFound.length > 0
+				? 'notInCatalog means no listing has been scraped for that store id yet — it is NOT a safety verdict.'
+				: undefined,
+	})
+}

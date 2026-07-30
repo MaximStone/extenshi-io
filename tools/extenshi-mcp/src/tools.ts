@@ -1,7 +1,7 @@
 /**
  * Transport-agnostic tool registry for the Extenshi MCP server.
  *
- * The SAME 8 tools must run over two transports:
+ * The SAME tool set must run over two transports:
  *   - stdio  (`index.ts`)  — local, single `ek_…` key from the environment.
  *   - remote (`http.ts`, in the sibling `@extenshi/mcp-server`) — Streamable
  *     HTTP behind OAuth; identity is per-request (an access token → userId).
@@ -22,7 +22,7 @@
  *   capability → tools
  *   ─────────────────────────────────────────────────────────────
  *   'read'    → search_extensions, get_extension, get_reviews,
- *               get_security, market_overview
+ *               get_security, get_risk_by_store_ids, market_overview
  *   'docs'    → search_docs, generate_icon_workflow,
  *               generate_welcome_page_workflow        (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
@@ -45,7 +45,7 @@ import {
 import { checkPublishAccess } from './publish-access.js'
 import { ScanError, scanArtifact } from './scan.js'
 import { describeStoreConstraints, validateSearchFilters } from './search-filters.js'
-import { shapeExtension, shapeReviews, shapeSearch, shapeSecurity } from './shape.js'
+import { shapeExtension, shapeReviews, shapeSearch, shapeSecurity, shapeStoreRiskBatch } from './shape.js'
 import { captureError, captureEvent, classifyError } from './telemetry.js'
 import { renderWelcomeWorkflow } from './welcome-workflow.js'
 
@@ -68,6 +68,18 @@ export const MISSING_KEY_MESSAGE =
 	'Tip: the `search_docs` tool is free and needs no key — use it any time to ' +
 	'look up product docs and CLI commands.'
 
+/**
+ * Max extensions `get_risk_by_store_ids` accepts per call.
+ *
+ * CROSS-PACKAGE SYNC POINT — nothing can import across it: this is a published
+ * npm package, the enforcing code is `METERED_BATCH_MAX_EXTENSIONS` in
+ * `catalog/catalog-bff/src/lib/metered-batch-cap.ts`. The BFF is the authority
+ * (it rejects an over-cap metered batch); this constant only keeps the tool
+ * schema and description honest so an agent is told the limit up front instead
+ * of discovering it as a round-tripped error. Pinned by `tools.test.ts`.
+ */
+export const MAX_BATCH_EXTENSIONS = 40
+
 export const SERVER_NAME = 'extenshi'
 
 export const SERVER_INSTRUCTIONS =
@@ -84,7 +96,9 @@ export const SERVER_INSTRUCTIONS =
 	'get_credit_balance (free — it never spends a credit) to check remaining read/scan credits ' +
 	'before a large batch instead of guessing whether it is safe. In get_extension / get_reviews / ' +
 	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
-	'(the id in the store URL; add the store for a Chrome/Edge id). The catalog and ' +
+	'(the id in the store URL; add the store for a Chrome/Edge id). To check a LIST of installed ' +
+	`extensions by store id, use get_risk_by_store_ids — up to ${MAX_BATCH_EXTENSIONS} per call for one ` +
+	'read credit total, instead of 3 credits per extension via get_security. The catalog and ' +
 	`scan tools require an Extenshi API key (${KEY_PAGE}). Every account gets a one-time free ` +
 	'allowance — 10 reads and 3 scans; beyond it, buy prepaid credit packs (scans ' +
 	`and reads, never expire) at ${BILLING_PAGE}.`
@@ -408,6 +422,12 @@ const TOOL_ANNOTATIONS: Record<
 		idempotentHint: true,
 		openWorldHint: true,
 	},
+	get_risk_by_store_ids: {
+		title: 'Bulk risk lookup by store id',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
 	market_overview: {
 		title: 'Catalog market overview',
 		readOnlyHint: true,
@@ -692,6 +712,53 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 		})
 
 		add({
+			name: 'get_risk_by_store_ids',
+			description:
+				'Look up the safety score and risk category for MANY extensions at once, addressed by their ' +
+				'STORE ids (the id in the store URL) — the inventory case: you have a list of what a user has ' +
+				`installed and need risk for all of it. Up to ${MAX_BATCH_EXTENSIONS} extensions per call, and ` +
+				'the WHOLE call costs 1 read credit (not 1 per extension), so prefer this over calling ' +
+				'get_security in a loop — that would cost 3 credits each. Returns safety score (0–100, higher ' +
+				'= safer, the same number the website shows), risk category, severity counts, last scan date ' +
+				'and the catalog URL per extension. Each store id is resolved through its cross-store cluster ' +
+				'to the same listing the extension page renders, so these answers agree with the website. ' +
+				'`store` is REQUIRED per entry — Chrome and Edge ids share one format. An extension with no ' +
+				'score has not been scanned yet (`scanned: false`); ids with no catalog listing come back ' +
+				'under `notInCatalog`. Neither means "safe". For the full findings list of ONE extension, use ' +
+				'get_security instead.',
+			parameters: z.object({
+				extensions: z
+					.array(
+						z.object({
+							store_id: z
+								.string()
+								.min(1)
+								.max(100)
+								.describe('The extension id from its store URL, e.g. "cjpalhdlnbpafiamejdnhcphjbkeiagm".'),
+							store: z
+								.enum(['CHROME', 'FIREFOX', 'EDGE'])
+								.describe('Which store this id belongs to. Required — Chrome and Edge ids look identical.'),
+						}),
+					)
+					.min(1)
+					.max(MAX_BATCH_EXTENSIONS)
+					.describe(
+						`The extensions to look up (max ${MAX_BATCH_EXTENSIONS}). Split a longer list into ` +
+							`batches of ${MAX_BATCH_EXTENSIONS}; each batch costs 1 read credit.`,
+					),
+			}),
+			execute: async (args, context) => {
+				try {
+					const refs = args.extensions.map((e) => ({ storeId: e.store_id, store: e.store }))
+					const rows = await bff(context).getSecuritySummaryBatch({ extensions: refs })
+					return JSON.stringify(shapeStoreRiskBatch(rows, refs), null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
 			name: 'market_overview',
 			description:
 				'Aggregate catalog market intelligence. Called with NO arguments it returns a full ' +
@@ -769,7 +836,8 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 			description:
 				'Check your remaining Extenshi credits BEFORE running a batch, so you never guess whether a ' +
 				'large request is safe. Returns every credit pool for your API key: `read` (spent one-per-call by ' +
-				'search_extensions / get_extension / get_reviews / market_overview; get_security costs 3) and ' +
+				'search_extensions / get_extension / get_reviews / market_overview / get_risk_by_store_ids — the ' +
+				'last one covers up to 40 extensions for that single credit; get_security costs 3) and ' +
 				'`scan` (spent by scan_extension), plus `icon` and `inventory`. Each pool reports `remaining` — the ' +
 				'number that actually gates calls (one-time free grant + purchased credits) — and `freeRemaining` ' +
 				'(how much of the never-renewing signup grant is left). FREE to call: checking your balance never ' +
