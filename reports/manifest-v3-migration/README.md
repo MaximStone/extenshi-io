@@ -22,8 +22,8 @@ snapshot**.
 
 | Store | Extensions | Manifest V3 | Manifest V2 | Unknown |
 |---|---:|---:|---:|---:|
-| Chrome Web Store | 228,105 | 228,104 (100.0%) | 0 (0.0%) | 1 |
-| Firefox Add-ons | 93,741 | 30,971 (33.0%) | 61,974 (66.1%) | 796 |
+| Chrome Web Store | 228,088 | 228,087 (100.0%) | 0 (0.0%) | 1 |
+| Firefox Add-ons | 93,740 | 30,971 (33.0%) | 61,972 (66.1%) | 797 |
 | Edge Add-ons | 21,648 | 18,762 (86.7%) | 2,886 (13.3%) | 0 |
 
 ```
@@ -32,7 +32,7 @@ Firefox  █████████████░░░░░░░░░░�
 Edge     ███████████████████████████████████░░░░░  MV3 86.7%
 ```
 
-Catalog-wide: **277,837 MV3** (80.9%) · **64,860 MV2** (18.9%) · 797 unknown.
+Catalog-wide: **277,820 MV3** (80.9%) · **64,858 MV2** (18.9%) · 798 unknown.
 
 Raw data: [`data/manifest-version.csv`](./data/manifest-version.csv)
 

@@ -1,18 +1,18 @@
 snapshot_date,permission,label,extensions,share_pct
-2026-07-30,tabs,"Read your tabs",98200,28.6
-2026-07-30,<all_urls>,"Access all sites",24175,7.0
-2026-07-30,downloads,"Manage downloads",18910,5.5
-2026-07-30,webRequest,"Intercept web requests",17616,5.1
+2026-07-30,tabs,"Read your tabs",98191,28.6
+2026-07-30,<all_urls>,"Access all sites",24172,7.0
+2026-07-30,downloads,"Manage downloads",18907,5.5
+2026-07-30,webRequest,"Intercept web requests",17618,5.1
 2026-07-30,cookies,"Read/write cookies",17370,5.1
-2026-07-30,webNavigation,"Track navigation",12790,3.7
-2026-07-30,declarativeNetRequest,"Modify network requests",10388,3.0
-2026-07-30,webRequestBlocking,"Block web requests",6706,2.0
-2026-07-30,bookmarks,"Read/write bookmarks",5633,1.6
+2026-07-30,webNavigation,"Track navigation",12789,3.7
+2026-07-30,declarativeNetRequest,"Modify network requests",10389,3.0
+2026-07-30,webRequestBlocking,"Block web requests",6707,2.0
+2026-07-30,bookmarks,"Read/write bookmarks",5632,1.6
 2026-07-30,clipboardRead,"Read clipboard",4168,1.2
-2026-07-30,nativeMessaging,"Talk to native apps",3912,1.1
+2026-07-30,nativeMessaging,"Talk to native apps",3914,1.1
 2026-07-30,history,"Read browsing history",3224,0.9
-2026-07-30,proxy,"Control proxy settings",2867,0.8
-2026-07-30,management,"Manage other extensions",2442,0.7
+2026-07-30,proxy,"Control proxy settings",2866,0.8
+2026-07-30,management,"Manage other extensions",2443,0.7
 2026-07-30,debugger,"Attach the debugger",2333,0.7
 2026-07-30,geolocation,"Access location",1203,0.4
 2026-07-30,privacy,"Change privacy settings",844,0.2
