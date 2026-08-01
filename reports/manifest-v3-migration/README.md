@@ -8,7 +8,7 @@ actually moved.
 Each extension is counted once, by the manifest version of its **latest visible
 snapshot**.
 
-> **Snapshot:** 2026-07-30 · **Catalog-wide MV3 adoption: 80.9%**
+> **Snapshot:** 2026-08-01 · **Catalog-wide MV3 adoption: 80.9%**
 
 ## The headline
 
@@ -22,7 +22,7 @@ snapshot**.
 
 | Store | Extensions | Manifest V3 | Manifest V2 | Unknown |
 |---|---:|---:|---:|---:|
-| Chrome Web Store | 228,088 | 228,087 (100.0%) | 0 (0.0%) | 1 |
+| Chrome Web Store | 228,074 | 228,073 (100.0%) | 0 (0.0%) | 1 |
 | Firefox Add-ons | 93,740 | 30,971 (33.0%) | 61,972 (66.1%) | 797 |
 | Edge Add-ons | 21,648 | 18,762 (86.7%) | 2,886 (13.3%) | 0 |
 
@@ -32,7 +32,7 @@ Firefox  █████████████░░░░░░░░░░�
 Edge     ███████████████████████████████████░░░░░  MV3 86.7%
 ```
 
-Catalog-wide: **277,820 MV3** (80.9%) · **64,858 MV2** (18.9%) · 798 unknown.
+Catalog-wide: **277,806 MV3** (80.9%) · **64,858 MV2** (18.9%) · 798 unknown.
 
 Raw data: [`data/manifest-version.csv`](./data/manifest-version.csv)
 
