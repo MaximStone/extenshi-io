@@ -47,6 +47,7 @@ import { ScanError, scanArtifact } from './scan.js'
 import { describeStoreConstraints, validateSearchFilters } from './search-filters.js'
 import { shapeExtension, shapeReviews, shapeSearch, shapeSecurity, shapeStoreRiskBatch } from './shape.js'
 import { captureError, captureEvent, classifyError } from './telemetry.js'
+import { renderCatalogPayload } from './untrusted.js'
 import { renderWelcomeWorkflow } from './welcome-workflow.js'
 
 // ── Public links (shared by tool bodies + server instructions) ──────────────
@@ -596,7 +597,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 						skip: args.skip,
 						take: limit,
 					})
-					return JSON.stringify(shapeSearch(result, limit), null, 2)
+					return renderCatalogPayload(shapeSearch(result, limit))
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}
@@ -616,7 +617,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					const extensionId = await resolveExtensionId(client, args)
 					const result = await client.getExtensionById(extensionId)
 					if (!result) throw new UserError(`No extension found with catalog ID ${extensionId}.`)
-					return JSON.stringify(shapeExtension(result), null, 2)
+					return renderCatalogPayload(shapeExtension(result))
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}
@@ -669,7 +670,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 						minRating: args.min_rating,
 						sort: args.sort ?? 'recent',
 					})
-					return JSON.stringify(shapeReviews(result, limit), null, 2)
+					return renderCatalogPayload(shapeReviews(result, limit))
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}
@@ -704,7 +705,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 						extension && typeof extension === 'object'
 							? (extension as Record<string, unknown>).installDialogPreview
 							: null
-					return JSON.stringify(shapeSecurity(security, riskSummary, installDialogPreview), null, 2)
+					return renderCatalogPayload(shapeSecurity(security, riskSummary, installDialogPreview))
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}
@@ -751,7 +752,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				try {
 					const refs = args.extensions.map((e) => ({ storeId: e.store_id, store: e.store }))
 					const rows = await bff(context).getSecuritySummaryBatch({ extensions: refs })
-					return JSON.stringify(shapeStoreRiskBatch(rows, refs), null, 2)
+					return renderCatalogPayload(shapeStoreRiskBatch(rows, refs))
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}
@@ -784,11 +785,11 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 								.getSearchFacets({ query: args.query, stores: args.stores, categories: args.categories })
 								.catch(() => null),
 						])
-						return JSON.stringify(
-							{ scope: 'search', stats: stats ?? undefined, facets: facets ?? undefined },
-							null,
-							2,
-						)
+						return renderCatalogPayload({
+							scope: 'search',
+							stats: stats ?? undefined,
+							facets: facets ?? undefined,
+						})
 					}
 
 					// Catalog-wide: the unscoped search facets are all-zero by design, so build the
@@ -811,20 +812,16 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 						count: r.count,
 						label: STORE_LABELS[r.store] ?? r.store,
 					}))
-					return JSON.stringify(
-						{
-							scope: 'catalog-wide',
-							stats: stats ?? undefined,
-							facets: {
-								stores,
-								categoryTree: categoryTree ?? undefined,
-								extended: extended ?? undefined,
-							},
-							note: 'Monetization and download-volume facets are only computed when scoped to a query — pass `query` to get those.',
+					return renderCatalogPayload({
+						scope: 'catalog-wide',
+						stats: stats ?? undefined,
+						facets: {
+							stores,
+							categoryTree: categoryTree ?? undefined,
+							extended: extended ?? undefined,
 						},
-						null,
-						2,
-					)
+						note: 'Monetization and download-volume facets are only computed when scoped to a query — pass `query` to get those.',
+					})
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}
@@ -1022,7 +1019,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 							}
 						},
 					})
-					return JSON.stringify(shapeExtension(report), null, 2)
+					return renderCatalogPayload(shapeExtension(report))
 				} catch (err) {
 					// Keep the ScanError as `cause`: scanErrorMessage() renders 402/429
 					// and a 500 alike, so only the origin's status still says which of
