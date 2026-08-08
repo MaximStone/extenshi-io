@@ -20,9 +20,17 @@
  *   - CI is set (CI re-installs would massively inflate the count);
  *   - no ingestion key is configured.
  *
- * Privacy: sends only the package version, Node version, coarse os/arch, and an
- * anonymous per-install UUID (the same id the runtime telemetry uses). Never any
- * path, package contents, or user input.
+ * Privacy: sends only the package version, Node version, coarse os/arch, a
+ * first-install-on-this-machine boolean, and an anonymous per-install UUID (the
+ * same id the runtime telemetry uses). Never any path, package contents, or
+ * user input.
+ *
+ * NB for anyone reading this as an adoption metric: it counts npm EXTRACTIONS,
+ * not users. Most of them are ecosystem scanners that install a new version once
+ * on a throwaway machine and never run the binary. The "did a client actually
+ * launch the server" signal is `mcp_server_started`, emitted from
+ * @extenshi/mcp's src/startup.ts — a relative path would be wrong in one of the
+ * two packages, since this file is vendored byte-identical into both.
  */
 
 // Shared EU PostHog project key (114791) — public, write-only, already in our
@@ -67,6 +75,15 @@ try {
 	} catch {}
 	if (cfg && cfg.telemetry === false) done()
 	let anonId = cfg && cfg.anonId
+	// No prior anonId means this machine has never installed EITHER package: the
+	// id lives in one shared ~/.extenshi/config.json, so installing the CLI makes
+	// a later MCP install report false, and vice versa. Hence the property name —
+	// `first_extenshi_install`, not `first_install`, which an analyst reading a
+	// raw `cli_installed` row would reasonably misread as "first install of the
+	// CLI". It separates a new machine from a version upgrade on a known one:
+	// with `npx -y @extenshi/…@latest` a client reinstalls on every publish, while
+	// a throwaway CI/scanner sandbox reports true every single time.
+	const firstExtenshiInstall = !anonId
 	if (!anonId) {
 		anonId = randomUUID()
 		try {
@@ -95,6 +112,7 @@ try {
 			arch: process.arch,
 			ci: false,
 			source: 'npm_postinstall',
+			first_extenshi_install: firstExtenshiInstall,
 		},
 	})
 

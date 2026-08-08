@@ -24,6 +24,7 @@ import { createRequire } from 'node:module'
 import { FastMCP, UserError } from 'fastmcp'
 import { type Bff, makeBff } from './bff.js'
 import { loadConfig } from './config.js'
+import { reportServerStarted } from './startup.js'
 import { flushTelemetry, initTelemetry } from './telemetry.js'
 import {
 	type Capability,
@@ -86,7 +87,22 @@ process.once('beforeExit', () => {
 	void flushTelemetry()
 })
 
-server.start({ transportType: 'stdio' })
+// Awaited, unlike the fire-and-forget calls around it. FastMCP's stdio `start()`
+// is genuinely async — it awaits `session.connect(transport)` and only then
+// registers the close handlers — so calling it and reporting on the next line
+// would time the event to "we called start", not "the session connected". It
+// resolves once connected rather than on shutdown, so awaiting it does not
+// strand the lines below. A rejection stays as loud as it was before: nothing
+// catches it, the process dies, and no event is emitted for a server that never
+// served. Top-level await is available here (ESM, target ES2022).
+await server.start({ transportType: 'stdio' })
+
+// Reaching this line means a client actually EXECUTED the server and the stdio
+// session connected: config parsed, tools registered, transport live. That is the
+// population `mcp_installed` cannot describe — postinstall counts npm extractions,
+// most of which are ecosystem scanners that never run the binary. See
+// ./startup.ts for the measurement.
+reportServerStarted(cfg.apiKey)
 
 // Fire-and-forget: nudge to stderr if a newer version is on npm. Never blocks
 // startup, never touches stdout (the MCP channel), fully fail-soft.
