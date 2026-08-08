@@ -474,6 +474,12 @@ const TOOL_ANNOTATIONS: Record<
 		idempotentHint: true,
 		openWorldHint: true,
 	},
+	get_project_scaffold: {
+		title: 'Get my starter extension files',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
 	generate_icon_workflow: {
 		title: 'Icon design workflow guide',
 		readOnlyHint: true,
@@ -936,6 +942,38 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 						includeToolStates: args.includeToolStates,
 					})
 					return JSON.stringify(state, null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'get_project_scaffold',
+			description:
+				"The starter extension one of the developer's own projects produces, as FILES ready to " +
+				'write: manifest.json for the target browser, the background worker, the panel or ' +
+				"content-script files that project's types need, placeholder icons, and " +
+				'src/extenshi.config.js. Write the files VERBATIM — the config carries a fingerprint ' +
+				"that lets extenshi.io keep recognising the repository as this project's, and rebuilding " +
+				'it by hand makes the site stop managing those values. Prefer this over writing a manifest ' +
+				'yourself: it is the same set the site commits, so what you write and what the site ' +
+				"expects cannot disagree. One browser per call (default: the project's first target). " +
+				'FREE — never spends a credit.',
+			parameters: z.object({
+				projectId: z.string().describe('Project id from list_my_projects.'),
+				browser: z
+					.enum(['chrome', 'firefox', 'edge'])
+					.optional()
+					.describe("Target browser. Omit for the project's first declared target."),
+			}),
+			execute: async (args, context) => {
+				try {
+					const scaffold = await bff(context).getMyProjectScaffold({
+						projectId: args.projectId,
+						browser: args.browser,
+					})
+					return JSON.stringify(scaffold, null, 2)
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}

@@ -97,6 +97,7 @@ const READ_TOOLS = [
 	// credits pay for data about other people's extensions, not for your own work.
 	'list_my_projects',
 	'get_project_state',
+	'get_project_scaffold',
 ]
 const DOCS_TOOLS = [
 	'search_docs',
@@ -107,14 +108,14 @@ const DOCS_TOOLS = [
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 15 tools', () => {
+	it('stdio (all capabilities) registers all 16 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(15)
+		expect(names).toHaveLength(16)
 	})
 
-	it('remote (read + docs only) registers the 13 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 14 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
@@ -464,7 +465,7 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(15)
+		expect(tools).toHaveLength(16)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')

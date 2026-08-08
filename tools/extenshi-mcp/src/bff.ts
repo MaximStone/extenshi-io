@@ -87,6 +87,12 @@ export interface Bff {
 	 * named payloads; without it the response lists what exists and how big.
 	 */
 	getMyProjectState(input: { projectId: string; includeToolStates?: string[] }): Promise<unknown>
+	/**
+	 * The starter extension one own project produces, as files — the same set the
+	 * site commits and packs into its download. FREE, same reasoning. One browser
+	 * per call: the manifests differ between them and the rest does not.
+	 */
+	getMyProjectScaffold(input: { projectId: string; browser?: string }): Promise<unknown>
 }
 
 /** Build a BFF client from a static `ek_…` key (stdio path). */
@@ -127,5 +133,6 @@ export function makeBffWithAuth(bffUrl: string, authHeader: () => string | Promi
 		getSecuritySummaryBatch: (input) => client.security.getSecuritySummaryBatch.query(input),
 		listMyProjects: () => client.devProject.agentListProjects.query(),
 		getMyProjectState: (input) => client.devProject.agentGetProjectState.query(input),
+		getMyProjectScaffold: (input) => client.devProject.agentGetProjectScaffold.query(input),
 	}
 }
