@@ -172,10 +172,15 @@ function sanitizeError(err: unknown): Error {
 
 /**
  * The HTTP status an error carries, whichever shape it arrived in:
- *   - `status`          — MCP ScanError, thrown by ./scan.ts.
+ *   - `status`          — the MCP package's ScanError (@extenshi/mcp scan.ts).
  *   - `data.httpStatus` — @trpc/client's TRPCClientError, i.e. every catalog BFF
- *     read. tRPC puts the status inside `data` and has NO top-level `status`, so
- *     reading only `status` left the entire read path to message heuristics.
+ *     read on EITHER surface. tRPC puts the status inside `data` and has NO
+ *     top-level `status`, so reading only `status` left the entire read path to
+ *     message heuristics.
+ *
+ * Surface-neutral on purpose: this file is vendored byte-identical into both
+ * packages (see the header), so it must describe both. Neither branch costs the
+ * surface that cannot produce that shape anything — the check simply never fires.
  */
 function statusOf(err: unknown): number | undefined {
 	const e = err as { status?: unknown; data?: { httpStatus?: unknown } } | null | undefined
@@ -216,15 +221,16 @@ const MAX_CAUSE_DEPTH = 4
 
 /**
  * Coarse error bucket. Driven by a numeric status when the error carries one
- * (ScanError `status`, tRPC `data.httpStatus`), else by message patterns (the
- * CLI throws plain Errors). Order matters — status first, then transport, then
- * semantic buckets.
+ * (ScanError `status`, tRPC `data.httpStatus`), else by message patterns (both
+ * surfaces also throw plain Errors). Order matters — status first, then
+ * transport, then semantic buckets.
  *
- * Follows the `cause` chain: the tool layer re-throws failures wrapped in a
- * `UserError` so fastmcp renders them for the caller (see readError() in
- * ./tools.ts), and that wrapper's own message can carry no status. The origin
- * hangs off `cause`, so an unclassifiable wrapper defers to what it wraps —
- * without it, a BFF 500 behind a UserError reads as `unexpected`.
+ * Follows the `cause` chain, because both surfaces re-throw a failure wrapped in
+ * an error of their own so it renders for the caller — the MCP tool layer wraps
+ * in fastmcp's `UserError` (readError() in its tools.ts) — and the wrapper's own
+ * message can carry no status. The origin hangs off `cause`, so an
+ * unclassifiable wrapper defers to what it wraps; without this, a BFF 500 behind
+ * a wrapper reads as `unexpected`.
  */
 export function classifyError(err: unknown): string {
 	let cur: unknown = err
@@ -232,9 +238,12 @@ export function classifyError(err: unknown): string {
 		const kind = classifyOne(cur)
 		if (kind !== 'unexpected') return kind
 		const next: unknown = (cur as { cause?: unknown }).cause
-		// An error that causes itself has no origin left to consult, which is a
-		// different thing from running out of depth budget. MAX_CAUSE_DEPTH would
-		// bound this anyway — stopping here just says so at the point it's true.
+		// Handles the DIRECT cycle only (`a.cause === a`): such an error has no
+		// origin left to consult, which is a different thing from running out of
+		// depth budget, so stopping here says so at the point it's true. A longer
+		// cycle (A → B → A) is not detected and is not meant to be — it terminates
+		// on MAX_CAUSE_DEPTH like any other over-deep chain, which is why the
+		// bound, not this check, is what guarantees termination.
 		if (next === cur) break
 		cur = next
 	}
