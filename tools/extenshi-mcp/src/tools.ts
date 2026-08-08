@@ -23,7 +23,7 @@
  *   ─────────────────────────────────────────────────────────────
  *   'read'    → search_extensions, get_extension, get_reviews,
  *               get_security, get_risk_by_store_ids, market_overview
- *   'docs'    → search_docs, generate_icon_workflow,
+ *   'docs'    → search_docs, list_extension_templates, generate_icon_workflow,
  *               generate_welcome_page_workflow        (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
  *   'publish' → publish_extension          (local creds; stdio only)
@@ -47,6 +47,7 @@ import { ScanError, scanArtifact } from './scan.js'
 import { describeStoreConstraints, validateSearchFilters } from './search-filters.js'
 import { shapeExtension, shapeReviews, shapeSearch, shapeSecurity, shapeStoreRiskBatch } from './shape.js'
 import { captureError, captureEvent, classifyError } from './telemetry.js'
+import { renderExtensionTemplates } from './templates.js'
 import { renderCatalogPayload } from './untrusted.js'
 import { renderWelcomeWorkflow } from './welcome-workflow.js'
 
@@ -95,7 +96,13 @@ export const SERVER_INSTRUCTIONS =
 	'after install — it returns which illustrations to produce for the chosen goal, how to mark ' +
 	'up where to click, and the block JSON to hand back. Call ' +
 	'get_credit_balance (free — it never spends a credit) to check remaining read/scan credits ' +
-	'before a large batch instead of guessing whether it is safe. In get_extension / get_reviews / ' +
+	'before a large batch instead of guessing whether it is safe. When the developer is BUILDING ' +
+	'an extension: call list_extension_templates (free, no key) for the four shapes and the ' +
+	'permissions each one requires before writing a manifest, and — when they mention "my ' +
+	'extension" or "my project" — list_my_projects then get_project_state (both free) to read the ' +
+	'types, manifest and hosted URLs they already configured on extenshi.io instead of asking them ' +
+	'to repeat it. Re-read get_project_state after they change something on the site. ' +
+	'In get_extension / get_reviews / ' +
 	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
 	'(the id in the store URL; add the store for a Chrome/Edge id). To check a LIST of installed ' +
 	`extensions by store id, use get_risk_by_store_ids — up to ${MAX_BATCH_EXTENSIONS} per call for one ` +
@@ -443,6 +450,24 @@ const TOOL_ANNOTATIONS: Record<
 	},
 	search_docs: {
 		title: 'Search Extenshi documentation',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	list_extension_templates: {
+		title: 'Extension types and their permissions',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: false,
+	},
+	list_my_projects: {
+		title: 'List my extension projects',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	get_project_state: {
+		title: 'Read my project state',
 		readOnlyHint: true,
 		idempotentHint: true,
 		openWorldHint: true,
@@ -850,6 +875,65 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				}
 			},
 		})
+
+		// ── The developer's OWN projects ───────────────────────────────────────
+		//
+		// Extenshi holds the state of an extension project — its type, its
+		// manifest, its live hosted pages — so an agent can read that instead of
+		// being told it again in prose, and so what it builds matches what the
+		// developer already configured. Both are FREE: credits pay for catalog
+		// data about other people's extensions, never for your own work.
+		add({
+			name: 'list_my_projects',
+			description:
+				"List the extension projects owned by this API key — the developer's own workspaces on " +
+				'extenshi.io. Returns id, name, status, target browsers, the bound GitHub repo (if any) and ' +
+				'the claimed store listing (if any). Start here when the developer says "my extension" or ' +
+				'"my project": the id you get back is what get_project_state takes. FREE — reading your own ' +
+				'projects never spends a credit.',
+			parameters: z.object({}),
+			execute: async (_args, context) => {
+				try {
+					return JSON.stringify(await bff(context).listMyProjects(), null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'get_project_state',
+			description:
+				"Read one of the developer's own projects as state you can build from: the extension TYPES " +
+				'they picked (popup / side panel / page enhancer / in-page assistant), the required ' +
+				'permissions those types force, the exact manifest.json the project produces for each target ' +
+				'browser, the files that type needs, live hosted URLs (uninstall survey), and an index of ' +
+				'every saved tool state with its size. Use it before writing code so the manifest you ship ' +
+				'matches what the developer configured on the site — and re-read it after they change ' +
+				'something rather than assuming. Tool-state payloads are NOT inlined by default (a single ' +
+				'row can be 256 KiB); name the keys you actually need in includeToolStates. FREE — never ' +
+				'spends a credit. Combine with list_extension_templates for what each type means.',
+			parameters: z.object({
+				projectId: z.string().describe('Project id from list_my_projects.'),
+				includeToolStates: z
+					.array(z.string())
+					.optional()
+					.describe(
+						'Tool keys whose saved payload to inline, e.g. ["manifest-generator", "privacy-policy-generator"]. Omit to get the index only.',
+					),
+			}),
+			execute: async (args, context) => {
+				try {
+					const state = await bff(context).getMyProjectState({
+						projectId: args.projectId,
+						includeToolStates: args.includeToolStates,
+					})
+					return JSON.stringify(state, null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
 	}
 
 	// ── Documentation (free; no API key required) ──────────────────────────────
@@ -969,6 +1053,26 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 					existingSteps: args.existing_steps,
 					accentColor: args.accent_color,
 				}),
+		})
+
+		add({
+			name: 'list_extension_templates',
+			description:
+				'The kinds of browser extension you can build, with the permissions each one REQUIRES: ' +
+				'Popup (toolbar window), Side panel (docked beside the page), Page enhancer (runs on sites ' +
+				'you list), In-page assistant (your own UI over any site). Types combine, and the required ' +
+				'permissions are the union. Call this BEFORE writing a manifest so you request the minimum ' +
+				'a shape actually needs instead of guessing — padded permissions are what store review ' +
+				'pushes back on. Also states the cross-browser rules (Chromium side_panel vs Firefox ' +
+				'sidebar_action) and the rule that a manifest must never name a file the package lacks. ' +
+				"FREE: no API key, no quota. For a specific project's chosen types use get_project_state.",
+			parameters: z.object({
+				types: z
+					.array(z.string())
+					.optional()
+					.describe('Limit to these type ids (popup, sidepanel, content, overlay). Omit for all four.'),
+			}),
+			execute: async (args) => renderExtensionTemplates(args.types),
 		})
 	}
 

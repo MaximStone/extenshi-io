@@ -75,6 +75,18 @@ export interface Bff {
 	getSecuritySummaryBatch(input: {
 		extensions: Array<{ storeId: string; store: 'CHROME' | 'FIREFOX' | 'EDGE' }>
 	}): Promise<unknown>
+	/**
+	 * The caller's OWN extension projects. FREE — credits pay for catalog data
+	 * about other people's extensions, never for reading your own work.
+	 */
+	listMyProjects(): Promise<unknown>
+	/**
+	 * One own project as state an agent can act on: chosen extension types, the
+	 * manifest.json that project produces per browser, live hosted URLs, and an
+	 * index of saved tool state. FREE, same reasoning. `includeToolStates` inlines
+	 * named payloads; without it the response lists what exists and how big.
+	 */
+	getMyProjectState(input: { projectId: string; includeToolStates?: string[] }): Promise<unknown>
 }
 
 /** Build a BFF client from a static `ek_…` key (stdio path). */
@@ -113,5 +125,7 @@ export function makeBffWithAuth(bffUrl: string, authHeader: () => string | Promi
 		getApiCallerBalance: () => client.cli.getApiCallerBalance.query(),
 		resolveExtensionRef: (input) => client.catalog.resolveExtensionRef.query(input),
 		getSecuritySummaryBatch: (input) => client.security.getSecuritySummaryBatch.query(input),
+		listMyProjects: () => client.devProject.agentListProjects.query(),
+		getMyProjectState: (input) => client.devProject.agentGetProjectState.query(input),
 	}
 }
