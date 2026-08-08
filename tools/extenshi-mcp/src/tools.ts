@@ -101,7 +101,9 @@ export const SERVER_INSTRUCTIONS =
 	'permissions each one requires before writing a manifest, and — when they mention "my ' +
 	'extension" or "my project" — list_my_projects then get_project_state (both free) to read the ' +
 	'types, manifest and hosted URLs they already configured on extenshi.io instead of asking them ' +
-	'to repeat it. Re-read get_project_state after they change something on the site. ' +
+	'to repeat it. Re-read get_project_state after they change something on the site, and write its ' +
+	'`integration.file` verbatim rather than hand-assembling the same values — that is what keeps the ' +
+	'site and the extension in sync. ' +
 	'In get_extension / get_reviews / ' +
 	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
 	'(the id in the store URL; add the store for a Chrome/Edge id). To check a LIST of installed ' +
@@ -910,7 +912,12 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				'browser, the files that type needs, live hosted URLs (uninstall survey), and an index of ' +
 				'every saved tool state with its size. Use it before writing code so the manifest you ship ' +
 				'matches what the developer configured on the site — and re-read it after they change ' +
-				'something rather than assuming. Tool-state payloads are NOT inlined by default (a single ' +
+				'something rather than assuming. It also returns the integration contract: write ' +
+				'`integration.file` to `integration.path` VERBATIM to wire the extension to this project — ' +
+				"those bytes carry a fingerprint extenshi.io uses to tell the developer's edits from its " +
+				'own, so an equivalent file you assemble yourself makes the site stop managing every value ' +
+				'in it. `integration.unwired` names the links this project has not set up yet — offer them ' +
+				'rather than inventing URLs. Tool-state payloads are NOT inlined by default (a single ' +
 				'row can be 256 KiB); name the keys you actually need in includeToolStates. FREE — never ' +
 				'spends a credit. Combine with list_extension_templates for what each type means.',
 			parameters: z.object({
