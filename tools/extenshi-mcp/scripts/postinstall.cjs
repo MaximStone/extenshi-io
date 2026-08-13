@@ -4,9 +4,10 @@
  * and @extenshi/mcp (it figures out which one it is from its own package.json).
  *
  * Fires a single `cli_installed` / `mcp_installed` event when the package is
- * installed as a real dependency, so we can see adoption in PostHog. It is a
- * standalone CommonJS script using ONLY Node built-ins (no posthog-node, no
- * build step) so it can run the instant npm extracts the tarball.
+ * installed as a real dependency ON A MACHINE THAT HAS ALREADY ACCEPTED
+ * telemetry, so we can see adoption in PostHog. It is a standalone CommonJS
+ * script using ONLY Node built-ins (no posthog-node, no build step) so it can
+ * run the instant npm extracts the tarball.
  *
  * Hard rules (a postinstall that breaks `npm install` is unacceptable):
  *   - ALWAYS exits 0, even on any error — wrapped in try/catch + a hard timeout.
@@ -15,8 +16,11 @@
  * It self-skips (no event, no network) when:
  *   - the package is NOT under node_modules — i.e. our own monorepo workspace
  *     install (tools/<pkg>), so dev installs never inflate adoption counts;
- *   - DO_NOT_TRACK is truthy, EXTENSHI_TELEMETRY is off, or config
- *     ~/.extenshi/config.json has "telemetry": false;
+ *   - ~/.extenshi/config.json does not hold "telemetry": true — consent must be
+ *     RECORDED, not merely un-refused. A postinstall runs before the CLI can
+ *     ask anything, so "no answer yet" is not permission (see the ACCEPTED-ONLY
+ *     note below);
+ *   - DO_NOT_TRACK is truthy or EXTENSHI_TELEMETRY is off;
  *   - CI is set (CI re-installs would massively inflate the count);
  *   - no ingestion key is configured.
  *
@@ -24,6 +28,21 @@
  * first-install-on-this-machine boolean, and an anonymous per-install UUID (the
  * same id the runtime telemetry uses). Never any path, package contents, or
  * user input.
+ *
+ * ACCEPTED-ONLY, and what that costs. Until 2026-08-13 this fired unless the
+ * user had actively opted out, which meant a first-ever install reported before
+ * anyone had been asked — the one place consent did not reach after the CLI
+ * grew a first-run question (tools/extenshi-cli/src/telemetry-consent.ts). The
+ * gate is now positive, and the consequences are deliberate:
+ *   - a FIRST install never pings. Only the CLI's first-run question writes
+ *     `telemetry: true`, and that happens on the first RUN, so the earliest
+ *     ping is the next upgrade of an accepted machine.
+ *   - @extenshi/mcp is headless and never prompts, so it can only ping on a
+ *     machine where the CLI recorded consent into the shared config. Treat its
+ *     install count as gone, not as a number that dropped.
+ *   - `first_extenshi_install` is therefore ~always false now. It is kept so the
+ *     event schema does not change under existing PostHog queries, not because
+ *     it still measures anything.
  *
  * NB for anyone reading this as an adoption metric: it counts npm EXTRACTIONS,
  * not users. Most of them are ecosystem scanners that install a new version once
@@ -35,9 +54,20 @@
 
 // Shared EU PostHog project key (114791) — public, write-only, already in our
 // web bundles. Override with EXTENSHI_POSTHOG_KEY; empty disables the ping.
+// NB: this line's NUMBER is pinned in .infisicalignore
+// (`…/postinstall.cjs:generic-api-key:<line>`) — gitleaks fingerprints include
+// it, so ADDING OR REMOVING LINES ABOVE HERE breaks the allowlist and turns the
+// key into a CI secret-scan failure. Move the fingerprint with it.
 const EMBEDDED_KEY = 'phc_fqKrAmtNZvJqe0krpYB3UwYqALLpT1WM8m5LtNs9eUu'
 const DEFAULT_HOST = 'https://eu.i.posthog.com'
 
+/**
+ * Every guard below calls this as `return done()`, not as a bare statement. The
+ * process.exit is what actually stops the script, but the `return` is what keeps
+ * the early exit true if this ever stops exiting synchronously — without it, a
+ * deferred done() would let the code past the consent gate run on a machine that
+ * never agreed to be measured.
+ */
 function done() {
 	process.exit(0)
 }
@@ -50,22 +80,22 @@ try {
 	const { randomUUID } = require('node:crypto')
 
 	// Real dependency install only — workspace path has no /node_modules/ segment.
-	if (!__dirname.includes(`${path.sep}node_modules${path.sep}`)) done()
+	if (!__dirname.includes(`${path.sep}node_modules${path.sep}`)) return done()
 
 	// CI re-installs would inflate the adoption count — skip them.
-	if (process.env.CI) done()
+	if (process.env.CI) return done()
 
 	const key = (process.env.EXTENSHI_POSTHOG_KEY || EMBEDDED_KEY).trim()
-	if (!key) done()
+	if (!key) return done()
 
 	const dnt = String(process.env.DO_NOT_TRACK || '')
 		.trim()
 		.toLowerCase()
-	if (['1', 'true', 'yes', 'on'].includes(dnt)) done()
+	if (['1', 'true', 'yes', 'on'].includes(dnt)) return done()
 	const optOut = String(process.env.EXTENSHI_TELEMETRY || '')
 		.trim()
 		.toLowerCase()
-	if (['0', 'false', 'off', 'no'].includes(optOut)) done()
+	if (['0', 'false', 'off', 'no'].includes(optOut)) return done()
 
 	// Anonymous per-install id, shared with the runtime telemetry module.
 	const configPath = path.join(os.homedir(), '.extenshi', 'config.json')
@@ -73,16 +103,22 @@ try {
 	try {
 		cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'))
 	} catch {}
-	if (cfg && cfg.telemetry === false) done()
-	let anonId = cfg && cfg.anonId
-	// No prior anonId means this machine has never installed EITHER package: the
-	// id lives in one shared ~/.extenshi/config.json, so installing the CLI makes
-	// a later MCP install report false, and vice versa. Hence the property name —
-	// `first_extenshi_install`, not `first_install`, which an analyst reading a
-	// raw `cli_installed` row would reasonably misread as "first install of the
-	// CLI". It separates a new machine from a version upgrade on a known one:
-	// with `npx -y @extenshi/…@latest` a client reinstalls on every publish, while
-	// a throwaway CI/scanner sandbox reports true every single time.
+
+	// Positive consent only. An install happens before the CLI can put the
+	// question, so an absent answer is "not asked yet", never "yes" — this exits
+	// for a machine that declined AND for one that has never been asked. Every
+	// line below this point, including minting the anonymous id, is reached only
+	// with a recorded `true`, which is what stops a bare `npx` from creating an
+	// identity on a machine that never agreed to one.
+	if (!cfg || cfg.telemetry !== true) return done()
+
+	let anonId = cfg.anonId
+	// Retained for event-schema stability, but it no longer measures anything:
+	// accepting the first-run question writes `telemetry: true` and then emits an
+	// event, which mints the id — so by the time this gate opens, an anonId is
+	// already there and this is false. It stays true only in the odd case of a
+	// config that kept the answer but lost the id. Before the accepted-only gate
+	// it was the new-machine-vs-upgrade discriminator described above.
 	const firstExtenshiInstall = !anonId
 	if (!anonId) {
 		anonId = randomUUID()
