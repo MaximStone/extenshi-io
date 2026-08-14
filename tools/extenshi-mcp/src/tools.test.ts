@@ -567,9 +567,13 @@ describe('instrument — expected errors skip exception capture', () => {
 		await expect(tool.execute({ extension_id: 1, limit: 20 }, {})).rejects.toBeInstanceOf(UserError)
 
 		expect(captureError).not.toHaveBeenCalled()
+		// Third arg is the distinct_id override: undefined here because these
+		// tools execute with no session, i.e. the local stdio surface, which stays
+		// on the per-install anonymous id.
 		expect(captureEvent).toHaveBeenCalledWith(
 			'mcp_tool_failed',
 			expect.objectContaining({ tool: 'get_reviews', error_kind: 'quota' }),
+			undefined,
 		)
 	})
 
@@ -588,6 +592,7 @@ describe('instrument — expected errors skip exception capture', () => {
 		expect(captureEvent).toHaveBeenCalledWith(
 			'mcp_tool_failed',
 			expect.objectContaining({ tool: 'get_reviews', error_kind: 'api_5xx' }),
+			undefined,
 		)
 	})
 
@@ -596,6 +601,102 @@ describe('instrument — expected errors skip exception capture', () => {
 		await expect(tool.execute({ extension_id: 1, limit: 20 }, {})).rejects.toBeInstanceOf(UserError)
 
 		expect(captureError).toHaveBeenCalledWith(expect.any(Error), { tool: 'get_reviews' })
+	})
+})
+
+// Who made the call. The hosted connector is ONE process serving many accounts,
+// so without this every user of the service collapses into the single per-install
+// anonymous id — and that id is re-minted whenever the container is replaced.
+describe('instrument — per-call attribution from the session', () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	/** A get_reviews tool whose BFF call succeeds, so the success path is exercised. */
+	function getReviewsToolResolving(): { execute: (a: unknown, c: unknown) => Promise<unknown> } {
+		const tools: Record<string, any> = {}
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
+		const stubBff = { getReviews: () => Promise.resolve({ reviews: [] }) } as unknown as Bff
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+		return tools.get_reviews
+	}
+
+	/** Same shape, but the BFF call rejects — for the failure-path assertion. */
+	function getReviewsToolRejecting(err: unknown): {
+		execute: (a: unknown, c: unknown) => Promise<unknown>
+	} {
+		const tools: Record<string, any> = {}
+		const server = {
+			addTool: (t: { name: string }) => {
+				tools[t.name] = t
+			},
+		}
+		const stubBff = { getReviews: () => Promise.reject(err) } as unknown as Bff
+		registerTools(server as unknown as Parameters<typeof registerTools>[0], {
+			cfg: { bffUrl: 'https://bff.test', scanUrl: 'https://scan.test', docsUrl: 'https://docs.test' },
+			capabilities: new Set<Capability>(['read']),
+			getBff: () => stubBff,
+		})
+		return tools.get_reviews
+	}
+
+	const remote = { userId: 'usr_42', sessionId: 'conn-abc', email: 'someone@example.com' }
+
+	it('reports the account id as the distinct_id and threads the connection', async () => {
+		const tool = getReviewsToolResolving()
+		await tool.execute({ extension_id: 1, limit: 20 }, { session: remote })
+
+		for (const event of ['mcp_tool_called', 'mcp_tool_succeeded']) {
+			expect(captureEvent).toHaveBeenCalledWith(
+				event,
+				expect.objectContaining({ tool: 'get_reviews', mcp_session_id: 'conn-abc' }),
+				'usr_42',
+			)
+		}
+	})
+
+	it('never reports the email — it stays in our own database', async () => {
+		const tool = getReviewsToolResolving()
+		await tool.execute({ extension_id: 1, limit: 20 }, { session: remote })
+
+		const everything = JSON.stringify((captureEvent as unknown as { mock: { calls: unknown[] } }).mock.calls)
+		expect(everything).not.toContain('someone@example.com')
+	})
+
+	it('carries the attribution onto failures too', async () => {
+		const tool = getReviewsToolRejecting(new TypeError('x.map is not a function'))
+		await expect(tool.execute({ extension_id: 1, limit: 20 }, { session: remote })).rejects.toBeInstanceOf(
+			UserError,
+		)
+
+		expect(captureEvent).toHaveBeenCalledWith(
+			'mcp_tool_failed',
+			expect.objectContaining({ tool: 'get_reviews', mcp_session_id: 'conn-abc' }),
+			'usr_42',
+		)
+	})
+
+	// Local stdio has no session at all; it must keep falling back to the
+	// per-install id rather than throwing inside instrumentation.
+	it.each([
+		['no session', undefined],
+		['a session without identity', { scopes: new Set() }],
+		['a non-object session', 'nonsense'],
+	])('degrades to anonymous for %s', async (_label, session) => {
+		const tool = getReviewsToolResolving()
+		await tool.execute({ extension_id: 1, limit: 20 }, { session })
+
+		expect(captureEvent).toHaveBeenCalledWith(
+			'mcp_tool_called',
+			expect.not.objectContaining({ mcp_session_id: expect.anything() }),
+			undefined,
+		)
 	})
 })
 

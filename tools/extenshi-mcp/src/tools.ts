@@ -264,10 +264,36 @@ export function isExpectedError(err: unknown, kind: string = classifyError(err))
 }
 
 /**
- * Wrap a tool definition so every call emits anonymous telemetry: which tool
- * ran, how long it took, and how it failed (coarse error_kind + sanitized
- * exception). The generic preserves the Zod-inferred `args` type — `parameters`
- * fixes Params, so the inner execute stays as strongly typed as before.
+ * Attribution for a tool call, lifted from the session the surface supplies.
+ *
+ * Local stdio has no session at all, so both fields come back undefined and
+ * captureEvent falls back to the per-install anonymous id — unchanged behaviour.
+ * The hosted connector authenticates every request, so it supplies both: the
+ * account id becomes the PostHog distinct_id, and the connection id threads one
+ * client's calls together (see tools/extenshi-mcp-server/src/identity.ts, which
+ * mints it per `authenticate()` — i.e. per connection, NOT per cached token).
+ *
+ * Read defensively: `session` is FastMCP's opaque auth record, and a surface
+ * that carries neither field must degrade to the local behaviour rather than
+ * throw inside instrumentation.
+ */
+function attribution(session: unknown): { userId?: string; sessionId?: string } {
+	if (!session || typeof session !== 'object') return {}
+	const s = session as Record<string, unknown>
+	return {
+		userId: typeof s.userId === 'string' && s.userId ? s.userId : undefined,
+		sessionId: typeof s.sessionId === 'string' && s.sessionId ? s.sessionId : undefined,
+	}
+}
+
+/**
+ * Wrap a tool definition so every call is reported: which tool ran, how long it
+ * took, and how it failed (coarse error_kind + sanitized exception). On the
+ * hosted connector the report also carries WHO — the authenticated account id —
+ * and which connection it belonged to; on local stdio it stays anonymous. Never
+ * the arguments, never the result. The generic preserves the Zod-inferred
+ * `args` type — `parameters` fixes Params, so the inner execute stays as
+ * strongly typed as before.
  * Fail-soft: telemetry never alters the tool's result or its thrown error.
  */
 function instrument<Params extends ToolParameters>(
@@ -279,10 +305,12 @@ function instrument<Params extends ToolParameters>(
 		...tool,
 		execute: async (args, context) => {
 			const startedAt = Date.now()
-			captureEvent('mcp_tool_called', { tool: name })
+			const { userId, sessionId } = attribution(context.session)
+			const props = { tool: name, ...(sessionId ? { mcp_session_id: sessionId } : {}) }
+			captureEvent('mcp_tool_called', props, userId)
 			try {
 				const result = await original(args, context)
-				captureEvent('mcp_tool_succeeded', { tool: name, duration_ms: Date.now() - startedAt })
+				captureEvent('mcp_tool_succeeded', { ...props, duration_ms: Date.now() - startedAt }, userId)
 				return result
 			} catch (err) {
 				// Classified once and threaded into both uses below: the reported
@@ -291,7 +319,11 @@ function instrument<Params extends ToolParameters>(
 				const kind = classifyError(err)
 				// The failure count is always tracked, so we keep visibility into
 				// how often callers hit each condition (incl. the billing gate).
-				captureEvent('mcp_tool_failed', { tool: name, error_kind: kind, duration_ms: Date.now() - startedAt })
+				captureEvent(
+					'mcp_tool_failed',
+					{ ...props, error_kind: kind, duration_ms: Date.now() - startedAt },
+					userId,
+				)
 				// …but only genuine faults are shipped as exceptions. Expected
 				// user-facing conditions (a quota gate, a bad key, a message we
 				// authored) are not bugs and must not open error-tracking issues.

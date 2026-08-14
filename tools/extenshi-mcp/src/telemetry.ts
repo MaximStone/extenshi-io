@@ -263,11 +263,33 @@ export function flagsFromArgv(argv: string[] = process.argv.slice(2)): string[] 
 	return [...flags]
 }
 
-export function captureEvent(event: string, properties: Record<string, unknown> = {}): void {
+/**
+ * `distinctId` overrides the per-install anonymous id. The CLI never passes it —
+ * one install IS one identity there. The hosted MCP connector must: it is one
+ * process serving many accounts, so the install id would collapse every user of
+ * the service into a single person and re-mint on each redeploy. It passes the
+ * authenticated account id instead (never an email — that stays in our own
+ * database, see tools/extenshi-mcp-server/src/legal.ts).
+ */
+export function captureEvent(
+	event: string,
+	properties: Record<string, unknown> = {},
+	distinctId?: string,
+): void {
 	const c = getClient()
 	if (!c) return
+	// Empty is treated as ABSENT, not as an id. PostHog accepts "" and mints a
+	// person nobody can resolve, so a caller bug would turn into permanently
+	// unattributable rows; degrading to the install id keeps the event readable.
+	// attribution() already filters empties — this restates the contract at the
+	// sink so it does not depend on the caller doing so.
+	const id = distinctId?.trim() || anonId()
 	try {
-		c.capture({ distinctId: anonId(), event, properties: { ...baseProps(), ...properties } })
+		c.capture({
+			distinctId: id,
+			event,
+			properties: { ...baseProps(), ...properties },
+		})
 	} catch {
 		// Telemetry must never throw into the command path.
 	}
