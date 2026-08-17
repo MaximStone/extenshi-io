@@ -14,7 +14,7 @@ const preview = {
 	chrome: {
 		warnings: [
 			{
-				message: 'Read and change all your data on the websites you visit',
+				message: 'Read and change all your data on all websites',
 				sources: ['<all_urls>', 'proxy'],
 			},
 			{ message: 'Read your browsing history', sources: ['tabs'] },
@@ -36,7 +36,7 @@ describe('shapeInstallDialog', () => {
 		const out = shapeInstallDialog(preview)
 		expect(out?.chrome).toEqual({
 			readsAllData: true,
-			warnings: ['Read and change all your data on the websites you visit', 'Read your browsing history'],
+			warnings: ['Read and change all your data on all websites', 'Read your browsing history'],
 		})
 		expect(out?.firefox).toEqual({
 			readsAllData: true,
