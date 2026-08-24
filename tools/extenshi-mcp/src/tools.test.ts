@@ -98,6 +98,10 @@ const READ_TOOLS = [
 	'list_my_projects',
 	'get_project_state',
 	'get_project_scaffold',
+	'list_privacy_policy_versions',
+	'get_privacy_policy_version',
+	'publish_privacy_policy',
+	'update_privacy_policy_with_ai',
 ]
 const DOCS_TOOLS = [
 	'search_docs',
@@ -108,14 +112,14 @@ const DOCS_TOOLS = [
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 16 tools', () => {
+	it('stdio (all capabilities) registers all 20 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(16)
+		expect(names).toHaveLength(20)
 	})
 
-	it('remote (read + docs only) registers the 14 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 18 research tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
@@ -465,7 +469,7 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(16)
+		expect(tools).toHaveLength(20)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')
@@ -493,10 +497,15 @@ describe('directory tool annotations', () => {
 		},
 	)
 
-	it('all remote-exposed (read + docs) tools are read-only', () => {
+	it('all remote-exposed (read + docs) tools are read-only except hosted-project writes', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
+		const hostedWrites = new Set(['publish_privacy_policy', 'update_privacy_policy_with_ai'])
 		for (const t of tools) {
+			if (hostedWrites.has(t.name)) {
+				expect(t.annotations?.readOnlyHint, `${t.name} mutates the hosted policy`).toBe(false)
+				continue
+			}
 			expect(t.annotations?.readOnlyHint, `${t.name} should be read-only`).toBe(true)
 		}
 	})

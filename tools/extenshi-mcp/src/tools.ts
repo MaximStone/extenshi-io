@@ -22,7 +22,9 @@
  *   capability → tools
  *   ─────────────────────────────────────────────────────────────
  *   'read'    → search_extensions, get_extension, get_reviews,
- *               get_security, get_risk_by_store_ids, market_overview
+ *               get_security, get_risk_by_store_ids, market_overview,
+ *               list_my_projects, get_project_state, get_project_scaffold,
+ *               list/get/publish/update privacy policy (hosted; Pro)
  *   'docs'    → search_docs, list_extension_templates, generate_icon_workflow,
  *               generate_welcome_page_workflow        (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
@@ -103,7 +105,9 @@ export const SERVER_INSTRUCTIONS =
 	'types, manifest and hosted URLs they already configured on extenshi.io instead of asking them ' +
 	'to repeat it. Re-read get_project_state after they change something on the site, and write its ' +
 	'`integration.file` verbatim rather than hand-assembling the same values — that is what keeps the ' +
-	'site and the extension in sync. ' +
+	'site and the extension in sync. On a Pro project, list_privacy_policy_versions / ' +
+	'get_privacy_policy_version read hosted policy versions; after the author changes permissions ' +
+	'or data practices, update_privacy_policy_with_ai then publish_privacy_policy (never invent a URL). ' +
 	'In get_extension / get_reviews / ' +
 	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
 	'(the id in the store URL; add the store for a Chrome/Edge id). To check a LIST of installed ' +
@@ -510,6 +514,30 @@ const TOOL_ANNOTATIONS: Record<
 		title: 'Get my starter extension files',
 		readOnlyHint: true,
 		idempotentHint: true,
+		openWorldHint: true,
+	},
+	list_privacy_policy_versions: {
+		title: 'List hosted privacy policy versions',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	get_privacy_policy_version: {
+		title: 'Read a privacy policy version',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: true,
+	},
+	publish_privacy_policy: {
+		title: 'Publish a hosted privacy policy',
+		readOnlyHint: false,
+		destructiveHint: false,
+		openWorldHint: true,
+	},
+	update_privacy_policy_with_ai: {
+		title: 'Update a privacy policy with AI',
+		readOnlyHint: false,
+		destructiveHint: false,
 		openWorldHint: true,
 	},
 	generate_icon_workflow: {
@@ -1006,6 +1034,96 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 						browser: args.browser,
 					})
 					return JSON.stringify(scaffold, null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'list_privacy_policy_versions',
+			description:
+				"List hosted privacy-policy versions for one of the developer's Pro projects: version number, " +
+				'kind (generated / edited / ai_updated / reverted), and which one is live. The public URL is ' +
+				'in get_project_state hostedArtifacts.privacyPolicy. Pro only — a free project returns ' +
+				'PROJECT_PREMIUM_REQUIRED. Does not spend a credit.',
+			parameters: z.object({
+				projectId: z.string().describe('Project id from list_my_projects.'),
+			}),
+			execute: async (args, context) => {
+				try {
+					return JSON.stringify(await bff(context).listPrivacyPolicyVersions(args), null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'get_privacy_policy_version',
+			description:
+				'Read the markdown (and HTML) of one hosted privacy-policy version. Use list_privacy_policy_versions ' +
+				'first. Pro only. Does not spend a credit.',
+			parameters: z.object({
+				projectId: z.string().describe('Project id from list_my_projects.'),
+				versionNumber: z
+					.number()
+					.int()
+					.positive()
+					.describe('Version number from list_privacy_policy_versions.'),
+			}),
+			execute: async (args, context) => {
+				try {
+					return JSON.stringify(await bff(context).getPrivacyPolicyVersion(args), null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'publish_privacy_policy',
+			description:
+				'Publish a hosted privacy policy for a Pro project. Omit bodyMarkdown to generate version 1 from ' +
+				'the saved form and manifest (always the first version). Pass bodyMarkdown to publish an edited ' +
+				'(or AI-updated) draft — that goes live at the same public URL. After a successful publish, ' +
+				're-read get_project_state so PRIVACY_POLICY_URL in integration.file is the hosted URL. ' +
+				'Show the author the URL before telling them it is live. Pro only.',
+			parameters: z.object({
+				projectId: z.string().describe('Project id from list_my_projects.'),
+				bodyMarkdown: z
+					.string()
+					.optional()
+					.describe('Full policy markdown. Omit to generate from current form + manifest.'),
+				kind: z
+					.enum(['generated', 'edited', 'ai_updated', 'reverted'])
+					.optional()
+					.describe(
+						'How this version was produced. Default: generated if no markdown, edited if markdown is set.',
+					),
+			}),
+			execute: async (args, context) => {
+				try {
+					return JSON.stringify(await bff(context).publishPrivacyPolicy(args), null, 2)
+				} catch (err) {
+					return readError(err, missingKeyMessage)
+				}
+			},
+		})
+
+		add({
+			name: 'update_privacy_policy_with_ai',
+			description:
+				"Propose an updated privacy policy that keeps the author's custom wording and adds sections " +
+				'required by new permissions or data practices. Does NOT go live — show proposedMarkdown to the ' +
+				'author, then call publish_privacy_policy with that markdown (kind ai_updated). Requires a ' +
+				'policy that is already published. Pro only.',
+			parameters: z.object({
+				projectId: z.string().describe('Project id from list_my_projects.'),
+			}),
+			execute: async (args, context) => {
+				try {
+					return JSON.stringify(await bff(context).updatePrivacyPolicyWithAi(args), null, 2)
 				} catch (err) {
 					return readError(err, missingKeyMessage)
 				}

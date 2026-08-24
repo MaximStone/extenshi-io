@@ -93,6 +93,10 @@ export interface Bff {
 	 * per call: the manifests differ between them and the rest does not.
 	 */
 	getMyProjectScaffold(input: { projectId: string; browser?: string }): Promise<unknown>
+	listPrivacyPolicyVersions(input: { projectId: string }): Promise<unknown>
+	getPrivacyPolicyVersion(input: { projectId: string; versionNumber: number }): Promise<unknown>
+	publishPrivacyPolicy(input: { projectId: string; bodyMarkdown?: string; kind?: string }): Promise<unknown>
+	updatePrivacyPolicyWithAi(input: { projectId: string }): Promise<unknown>
 }
 
 /** Build a BFF client from a static `ek_…` key (stdio path). */
@@ -134,5 +138,9 @@ export function makeBffWithAuth(bffUrl: string, authHeader: () => string | Promi
 		listMyProjects: () => client.devProject.agentListProjects.query(),
 		getMyProjectState: (input) => client.devProject.agentGetProjectState.query(input),
 		getMyProjectScaffold: (input) => client.devProject.agentGetProjectScaffold.query(input),
+		listPrivacyPolicyVersions: (input) => client.privacyPolicy.agentListVersions.query(input),
+		getPrivacyPolicyVersion: (input) => client.privacyPolicy.agentGetVersion.query(input),
+		publishPrivacyPolicy: (input) => client.privacyPolicy.agentPublish.mutate(input),
+		updatePrivacyPolicyWithAi: (input) => client.privacyPolicy.agentUpdateWithAi.mutate(input),
 	}
 }
