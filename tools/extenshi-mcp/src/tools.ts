@@ -107,8 +107,8 @@ export const SERVER_INSTRUCTIONS =
 	'`integration.file` verbatim rather than hand-assembling the same values — that is what keeps the ' +
 	'site and the extension in sync. On a Pro project, list_privacy_policy_versions / ' +
 	'get_privacy_policy_version read hosted policy versions; after the author changes permissions ' +
-	'or data practices, update_privacy_policy_with_ai then publish_privacy_policy (never invent a URL). ' +
-	'In get_extension / get_reviews / ' +
+	'or data practices, update_privacy_policy_with_ai then publish_privacy_policy (never invent a URL). '
+'In get_extension / get_reviews / ' +
 	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
 	'(the id in the store URL; add the store for a Chrome/Edge id). To check a LIST of installed ' +
 	`extensions by store id, use get_risk_by_store_ids — up to ${MAX_BATCH_EXTENSIONS} per call for one ` +
@@ -1039,7 +1039,6 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 				}
 			},
 		})
-
 		add({
 			name: 'list_privacy_policy_versions',
 			description:
