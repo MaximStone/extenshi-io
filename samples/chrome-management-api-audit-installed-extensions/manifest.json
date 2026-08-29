@@ -1,0 +1,11 @@
+{
+	"manifest_version": 3,
+	"name": "Extension Auditor",
+	"version": "1.0",
+	"description": "Lists every installed extension with Chrome's own permission warnings, broadest capability first.",
+	"permissions": ["management"],
+	"action": {
+		"default_title": "Extension Auditor",
+		"default_popup": "popup.html"
+	}
+}

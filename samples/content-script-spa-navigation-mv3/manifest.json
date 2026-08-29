@@ -1,0 +1,19 @@
+{
+	"manifest_version": 3,
+	"name": "SPA Route Panel",
+	"version": "1.0",
+	"description": "Shows the current route on YouTube and keeps it correct across in-app navigation.",
+	"permissions": ["webNavigation"],
+	"host_permissions": ["*://*.youtube.com/*"],
+	"background": {
+		"service_worker": "service-worker.js"
+	},
+	"content_scripts": [
+		{
+			"matches": ["*://*.youtube.com/*"],
+			"js": ["content/panel.js"],
+			"css": ["content/panel.css"],
+			"run_at": "document_idle"
+		}
+	]
+}

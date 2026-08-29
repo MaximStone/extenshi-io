@@ -1,0 +1,71 @@
+body {
+	width: 380px;
+	max-height: 560px;
+	margin: 0;
+	padding: 12px 14px 16px;
+	font: 13px/1.45 system-ui, sans-serif;
+	color: #1f1b16;
+}
+h1 {
+	margin: 0;
+	font-size: 15px;
+}
+#summary {
+	margin: 4px 0 12px;
+	color: #6b6259;
+}
+#list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.row {
+	padding: 10px 0;
+	border-top: 1px solid #eae5dd;
+}
+.row.off {
+	opacity: 0.55;
+}
+.head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.name {
+	flex: 1;
+	font-weight: 600;
+}
+.badge {
+	padding: 1px 7px;
+	border-radius: 10px;
+	background: #fb5b1a;
+	color: #fff;
+	font-size: 11px;
+}
+.tag {
+	padding: 1px 6px;
+	border: 1px solid #d8d0c6;
+	border-radius: 4px;
+	font-size: 11px;
+}
+button {
+	padding: 3px 10px;
+	border: 1px solid #d8d0c6;
+	border-radius: 4px;
+	background: #fff;
+	cursor: pointer;
+}
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+.warnings {
+	margin: 6px 0 0;
+	padding-left: 18px;
+	color: #4a433b;
+}
+.quiet {
+	color: #8b8279;
+	list-style: none;
+	margin-left: -18px;
+}

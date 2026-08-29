@@ -1,0 +1,40 @@
+[
+  {
+    "id": 1,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||example.com/",
+      "resourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "transform": {
+          "queryTransform": {
+            "removeParams": [
+              "utm_source",
+              "utm_medium",
+              "utm_campaign",
+              "utm_term",
+              "utm_content",
+              "utm_id",
+              "gclid",
+              "fbclid",
+              "mc_eid",
+              "igshid"
+            ]
+          }
+        }
+      }
+    },
+    "condition": {
+      "regexFilter": "[?&](utm_source|utm_medium|utm_campaign|utm_term|utm_content|utm_id|gclid|fbclid|mc_eid|igshid)=",
+      "resourceTypes": ["main_frame"]
+    }
+  }
+]

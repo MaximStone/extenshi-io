@@ -1,0 +1,28 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, sans-serif;
+}
+header {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e2dc;
+}
+header h1 { margin: 0; font-size: 15px; }
+#scope { font-size: 12px; color: #8a8378; }
+#notes {
+  flex: 1;
+  border: 0;
+  resize: none;
+  padding: 14px;
+  font: inherit;
+  outline: none;
+}
+footer {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #8a8378;
+  border-top: 1px solid #e5e2dc;
+}

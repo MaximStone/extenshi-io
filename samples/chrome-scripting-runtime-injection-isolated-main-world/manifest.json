@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Page Lens",
+  "version": "1.0.0",
+  "description": "Click the toolbar icon to see what the page in front of you is built with.",
+  "permissions": ["scripting", "activeTab"],
+  "action": {
+    "default_title": "Page Lens"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  }
+}

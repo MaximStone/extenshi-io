@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Clean Link",
+  "version": "1.0",
+  "description": "Blocks domains and strips tracking parameters, using declarativeNetRequest.",
+  "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback"],
+  "host_permissions": ["*://*/*"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Clean Link",
+    "default_popup": "popup.html"
+  }
+}

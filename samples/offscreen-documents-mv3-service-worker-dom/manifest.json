@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Outline It",
+  "version": "1.0",
+  "description": "Copies a heading outline of the current page to your clipboard.",
+  "permissions": [
+    "offscreen",
+    "activeTab",
+    "scripting",
+    "clipboardWrite"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Copy this page's outline"
+  }
+}

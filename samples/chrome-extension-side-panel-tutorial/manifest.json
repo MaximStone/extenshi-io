@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Browsing Notepad",
+  "version": "1.0",
+  "description": "A notepad that stays open in the side panel while you browse.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Open notepad"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

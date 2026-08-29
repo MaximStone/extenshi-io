@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Curfew",
+  "version": "1.0",
+  "description": "Counts your open tabs on a schedule and badges the toolbar when you're over your limit.",
+  "permissions": [
+    "alarms",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Tab Curfew",
+    "default_popup": "popup.html"
+  }
+}

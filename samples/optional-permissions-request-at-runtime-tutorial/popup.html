@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <label class="note-label" for="note">Today's note</label>
+    <textarea id="note" rows="2" placeholder="One thing you actually want to finish…"></textarea>
+
+    <section>
+      <h2>Top sites</h2>
+      <p class="why">Reads your most-visited list to show five shortcuts here. Nothing leaves the browser.</p>
+      <button id="enable-top-sites" hidden>Turn on</button>
+      <button id="disable-top-sites" class="off" hidden>Turn off</button>
+      <p class="status" id="top-sites-status"></p>
+      <ul id="top-sites"></ul>
+    </section>
+
+    <section>
+      <h2>Read <span id="site-label">this site</span></h2>
+      <p class="why">Fetches the page you're on and reports its title, size and link count. Asks for this one site, nothing else.</p>
+      <button id="enable-site" hidden>Turn on</button>
+      <button id="disable-site" class="off" hidden>Turn off</button>
+      <p class="status" id="site-output"></p>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

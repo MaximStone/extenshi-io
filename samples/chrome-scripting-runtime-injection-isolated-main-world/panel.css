@@ -1,0 +1,52 @@
+#page-lens-panel {
+  all: initial;
+  display: block;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 260px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  font: 13px/1.5 system-ui, sans-serif;
+  color: #1f1b16;
+  background: #faf9f5;
+  border: 1px solid #1f1b16;
+  border-radius: 8px;
+}
+
+#page-lens-panel h2 {
+  all: initial;
+  display: block;
+  font: 600 13px/1.5 system-ui, sans-serif;
+  color: #1f1b16;
+  margin: 0 0 6px;
+}
+
+#page-lens-panel p,
+#page-lens-panel li {
+  all: initial;
+  font: 13px/1.5 system-ui, sans-serif;
+  color: #1f1b16;
+}
+
+#page-lens-panel p {
+  display: block;
+  margin: 0;
+}
+
+#page-lens-panel ul {
+  all: initial;
+  display: block;
+  margin: 6px 0 0;
+  padding: 0 0 0 18px;
+  list-style: disc;
+}
+
+#page-lens-panel li {
+  display: list-item;
+}
+
+#page-lens-panel .lens-dim {
+  color: #6b6459;
+}

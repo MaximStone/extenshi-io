@@ -1,0 +1,25 @@
+body {
+  width: 280px;
+  margin: 0;
+  padding: 14px;
+  font: 13px/1.45 system-ui, sans-serif;
+  color: #1f1b16;
+  background: #faf9f5;
+}
+h2 { font-size: 13px; margin: 18px 0 4px; }
+.note-label { display: block; font-weight: 600; margin-bottom: 4px; }
+textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
+.why { color: #6b6459; margin: 0 0 8px; }
+button {
+  font: inherit;
+  padding: 5px 10px;
+  border: 1px solid #fb5b1a;
+  border-radius: 6px;
+  background: #fb5b1a;
+  color: #fff;
+  cursor: pointer;
+}
+button.off { background: none; color: #fb5b1a; }
+.status { margin: 8px 0 0; color: #6b6459; }
+ul { margin: 8px 0 0; padding-left: 18px; }
+a { color: #fb5b1a; }

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Permission Desk",
+  "version": "1.0.0",
+  "description": "A popup whose features ask for their own permissions the moment you switch them on.",
+  "permissions": ["storage", "activeTab"],
+  "optional_permissions": ["topSites"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {
+    "default_title": "Permission Desk",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  }
+}
