@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Rec Tab",
+  "version": "1.0",
+  "description": "Records the current tab's video and audio to a .webm file.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "downloads"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Start / stop recording this tab"
+  }
+}

@@ -45,6 +45,7 @@ backend with your own API key — there's nothing to host.
 → [**Full CLI command reference**](./tools/extenshi-cli/) — every command and flag
 → [**Example output**](./examples/) — see the HTML report and the icon preview before installing anything
 → [**Agent skills**](./skills/) — free `SKILL.md` files your coding agent can pick up
+→ [**Sample extensions**](./samples/) — complete, loadable extension code from our blog tutorials
 → [**tools/**](./tools/) — setup for both npm packages
 
 Most of the CLI is **free and offline** — only `scan` and `risk` spend credits:
@@ -134,7 +135,7 @@ Whether it's in **our** platform or in an **extension** we list, see
 
 ## Links
 
-**In this repo:** [CLI reference](./tools/extenshi-cli/) · [example output](./examples/) · [agent skills](./skills/) · [tools setup](./tools/) · [research reports](./reports/) · [security policy](./SECURITY.md)
+**In this repo:** [CLI reference](./tools/extenshi-cli/) · [example output](./examples/) · [agent skills](./skills/) · [sample extensions](./samples/) · [tools setup](./tools/) · [research reports](./reports/) · [security policy](./SECURITY.md)
 
 - Website — <https://extenshi.io>
 - Catalog — <https://catalog.extenshi.io>
@@ -146,7 +147,7 @@ Whether it's in **our** platform or in an **extension** we list, see
 
 ## License
 
-The contents of this repository (docs, examples, and report data) are released
+The contents of this repository (docs, examples, samples, and report data) are released
 under [MIT](./LICENSE), except the research datasets, which are
 [CC BY 4.0](./reports/state-of-extensions/). The extenshi.io platform itself is a
 hosted product and is not open source.
