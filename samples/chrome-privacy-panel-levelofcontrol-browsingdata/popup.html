@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Clean Slate</title>
+    <style>
+      body { width: 340px; margin: 0; padding: 12px; color: #1f1b16;
+             font: 13px/1.45 system-ui, sans-serif; }
+      h1 { font-size: 15px; margin: 0 0 8px; }
+      h2 { font-size: 13px; margin: 18px 0 6px; }
+      section + section { border-top: 1px solid #e6e2da; padding-top: 4px; }
+      label { display: block; margin: 3px 0; }
+      label.locked { opacity: 0.5; }
+      .why { display: block; font-size: 11px; color: #6b6459; margin-left: 20px; }
+      .status { min-height: 16px; font-size: 11px; color: #6b6459; }
+      .row { display: flex; justify-content: space-between; gap: 8px; }
+      .row span:last-child { color: #6b6459; }
+      button { margin-top: 10px; padding: 6px 10px; border: 0; border-radius: 6px;
+               background: #fb5b1a; color: #fff; font: inherit; cursor: pointer; }
+      button[disabled] { background: #d6d1c8; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <section>
+      <h1>Clear browsing data</h1>
+      <label>
+        Time range
+        <select id="range">
+          <option value="hour">Last hour</option>
+          <option value="day">Last 24 hours</option>
+          <option value="week">Last 7 days</option>
+          <option value="everything">Everything</option>
+        </select>
+      </label>
+      <div id="types"></div>
+      <button id="clear-run">Clear now</button>
+      <p class="status" id="clear-status" role="status"></p>
+    </section>
+
+    <section>
+      <h2>Browser privacy switches</h2>
+      <p class="status" id="privacy-status"></p>
+      <button id="privacy-grant" hidden>Turn this panel on</button>
+      <div id="privacy-list"></div>
+    </section>
+
+    <section>
+      <h2>What this site is allowed to do</h2>
+      <p class="status" id="site-status"></p>
+      <button id="site-grant" hidden>Turn this panel on</button>
+      <div id="site-list"></div>
+    </section>
+
+    <script type="module" src="clear.js"></script>
+    <script type="module" src="toggles.js"></script>
+    <script type="module" src="site.js"></script>
+  </body>
+</html>

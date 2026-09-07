@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Clean Slate",
+  "version": "1.0",
+  "description": "Clear browsing data, see which privacy switches you actually control, and check what the current site is allowed to do.",
+  "permissions": ["browsingData", "activeTab"],
+  "optional_permissions": ["privacy", "contentSettings"],
+  "action": {
+    "default_title": "Clean Slate",
+    "default_popup": "popup.html"
+  }
+}
