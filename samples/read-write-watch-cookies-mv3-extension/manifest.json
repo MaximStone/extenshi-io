@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Cookie Peek",
+  "version": "1.0",
+  "description": "Lists, edits and watches the cookies of the site in the current tab.",
+  "permissions": [
+    "cookies",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Cookies for this site"
+  }
+}
