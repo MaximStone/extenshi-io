@@ -28,9 +28,9 @@ import { reportServerStarted } from './startup.js'
 import { flushTelemetry, initTelemetry } from './telemetry.js'
 import {
 	type Capability,
+	getServerInstructions,
 	MISSING_KEY_MESSAGE,
 	registerTools,
-	SERVER_INSTRUCTIONS,
 	SERVER_NAME,
 	type ToolDeps,
 } from './tools.js'
@@ -54,18 +54,20 @@ function bff(): Bff {
 	return makeBff(cfg.bffUrl, requireKey())
 }
 
+const capabilities = new Set<Capability>(['read', 'docs', 'scan', 'publish'])
+
 const server = new FastMCP({
 	name: SERVER_NAME,
 	// FastMCP types `version` as a semver template literal; package.json gives a plain string.
 	version: pkg.version as `${number}.${number}.${number}`,
-	instructions: SERVER_INSTRUCTIONS,
+	instructions: getServerInstructions(capabilities),
 })
 
 // stdio identity is fixed (env key) — the call context is ignored. ALL four
 // capabilities are enabled: the local client has a filesystem and store creds.
 const stdioDeps: ToolDeps = {
 	cfg: { bffUrl: cfg.bffUrl, scanUrl: cfg.scanUrl, docsUrl: cfg.docsUrl },
-	capabilities: new Set<Capability>(['read', 'docs', 'scan', 'publish']),
+	capabilities,
 	getBff: () => bff(),
 	requireApiKey: () => requireKey(),
 	getApiKey: () => cfg.apiKey ?? undefined,

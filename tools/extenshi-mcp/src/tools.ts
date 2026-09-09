@@ -13,7 +13,7 @@
  * passes deps that read `context.session` (the validated OAuth identity).
  *
  * Capability gating: the remote connector deliberately exposes a SUBSET — the
- * read/research/docs tools only. `scan_extension` and `publish_extension` need
+ * catalog/project/policy/guidance tools. `scan_extension` and `publish_extension` need
  * the caller's LOCAL filesystem and LOCAL store credentials, which a hosted
  * server has no access to (and must never store) — so they are registered only
  * when the corresponding capability is present (stdio enables all four).
@@ -25,7 +25,7 @@
  *               get_security, get_risk_by_store_ids, market_overview,
  *               list_my_projects, get_project_state, get_project_scaffold,
  *               list/get/publish/update privacy policy (hosted; Pro)
- *   'docs'    → search_docs, list_extension_templates, generate_icon_workflow,
+ *   'docs'    → get_development_guide, search_docs, list_extension_templates, generate_icon_workflow,
  *               generate_welcome_page_workflow        (free; no key)
  *   'scan'    → scan_extension             (local artifact; stdio only)
  *   'publish' → publish_extension          (local creds; stdio only)
@@ -36,6 +36,7 @@
 import { type FastMCP, type FastMCPSessionAuth, type Tool, type ToolParameters, UserError } from 'fastmcp'
 import { z } from 'zod'
 import type { Bff } from './bff.js'
+import { buildDevelopmentGuide, type GuideTool } from './development-guide.js'
 import { DocsError, getDocsIndex, searchDocs } from './docs.js'
 import { renderIconWorkflow } from './icon-workflow.js'
 import {
@@ -87,35 +88,36 @@ export const MAX_BATCH_EXTENSIONS = 40
 export const SERVER_NAME = 'extenshi'
 
 export const SERVER_INSTRUCTIONS =
-	'Extenshi catalog tools for extension developers: search the cross-store catalog, ' +
-	'inspect an extension and its security findings, find competitors, read market stats, ' +
-	'run a pre-publish security scan, and publish to the stores. Use search_docs (free, no ' +
-	'key) to consult the live product documentation and the @extenshi/cli command reference — ' +
-	'prefer quoting exact CLI commands and flags from the docs over guessing. Use ' +
-	'generate_icon_workflow (free, no key) when the developer needs an extension icon — it ' +
-	'returns the local agent-draws-SVG → CLI browser-panel preview → export workflow. Use ' +
-	'generate_welcome_page_workflow (free, no key) when the developer needs the page shown right ' +
-	'after install — it returns which illustrations to produce for the chosen goal, how to mark ' +
-	'up where to click, and the block JSON to hand back. Call ' +
-	'get_credit_balance (free — it never spends a credit) to check remaining read/scan credits ' +
-	'before a large batch instead of guessing whether it is safe. When the developer is BUILDING ' +
-	'an extension: call list_extension_templates (free, no key) for the four shapes and the ' +
-	'permissions each one requires before writing a manifest, and — when they mention "my ' +
-	'extension" or "my project" — list_my_projects then get_project_state (both free) to read the ' +
-	'types, manifest and hosted URLs they already configured on extenshi.io instead of asking them ' +
-	'to repeat it. Re-read get_project_state after they change something on the site, and write its ' +
-	'`integration.file` verbatim rather than hand-assembling the same values — that is what keeps the ' +
-	'site and the extension in sync. On a Pro project, list_privacy_policy_versions / ' +
-	'get_privacy_policy_version read hosted policy versions; after the author changes permissions ' +
-	'or data practices, update_privacy_policy_with_ai then publish_privacy_policy (never invent a URL). '
-'In get_extension / get_reviews / ' +
-	'get_security you can identify an extension either by its numeric catalog id or by its store id ' +
-	'(the id in the store URL; add the store for a Chrome/Edge id). To check a LIST of installed ' +
-	`extensions by store id, use get_risk_by_store_ids — up to ${MAX_BATCH_EXTENSIONS} per call for one ` +
-	'read credit total, instead of 3 credits per extension via get_security. The catalog and ' +
-	`scan tools require an Extenshi API key (${KEY_PAGE}). Every account gets a one-time free ` +
-	'allowance — 10 reads and 3 scans; beyond it, buy prepaid credit packs (scans ' +
-	`and reads, never expire) at ${BILLING_PAGE}.`
+	'Extenshi helps develop and operate browser extensions. Start extension-development tasks with ' +
+	'get_development_guide (free): it lists every tool on this connection, the service directory, ' +
+	'account/local prerequisites, documentation links, GitHub repository guidance and the ordered ' +
+	'plan from scope and research through code, assets, privacy, CI, store release and maintenance. ' +
+	'Keep a checklist covering the whole requested lifecycle. Use search_docs (free) for current ' +
+	'product details and exact CLI flags. With identity, call list_my_projects then get_project_state ' +
+	'to reuse the existing project and repository. Use list_extension_templates before the manifest, ' +
+	'and get_project_scaffold for a new project. Preserve existing source; write integration.file ' +
+	'verbatim to integration.path, check integration.unwired and re-read state after cabinet edits. ' +
+	'Check get_credit_balance before metered work. get_risk_by_store_ids covers up to 40 store IDs ' +
+	'for one read; get_security costs three reads for detailed findings. Hosted policy tools require ' +
+	'Pro; publish_privacy_policy changes the live policy, while update_privacy_policy_with_ai returns ' +
+	"a proposal to review. Respect the author's authorization for publication and repository writes. " +
+	'Tool registration is not proof of account entitlements or a completed release. Verify hosted ' +
+	'URLs, built artifacts, store status and optional purchases before reporting completion. ' +
+	`API keys: ${KEY_PAGE}. Credits: ${BILLING_PAGE}.`
+
+/** Match initialize instructions to the same capabilities used for registration. */
+export function getServerInstructions(capabilities: ReadonlySet<Capability>): string {
+	const local = [
+		capabilities.has('scan') ? 'scan_extension' : null,
+		capabilities.has('publish') ? 'publish_extension' : null,
+	].filter(Boolean)
+	return (
+		SERVER_INSTRUCTIONS +
+		(local.length
+			? ` This connection exposes ${local.join(' and ')} for local artifacts; check credentials and access before use.`
+			: " This connection has no local artifact scan or store-publishing tool. Use the local stdio server or CLI on the developer's machine for those stages; hosted privacy-policy publishing is a separate capability.")
+	)
+}
 
 // ── Injected dependencies ───────────────────────────────────────────────────
 
@@ -431,7 +433,7 @@ async function resolveOptionalExtensionId(client: Bff, args: ExtensionRefArgs): 
  * Anthropic Connectors Directory — its submission portal auto-syncs tools and
  * refuses to submit any tool missing a `title` or a read/write hint. Kept as a
  * name→annotation map (not inline per tool) so the read/write split is auditable
- * in one place. Every remote-exposed tool is read-only; scan uploads an artifact
+ * in one place. Hosted policy publication writes a public page; scan uploads an artifact
  * (not read-only, not destructive); publish writes to public stores (destructive).
  */
 const TOOL_ANNOTATIONS: Record<
@@ -485,6 +487,12 @@ const TOOL_ANNOTATIONS: Record<
 		readOnlyHint: true,
 		idempotentHint: true,
 		openWorldHint: true,
+	},
+	get_development_guide: {
+		title: 'Extension development services and workflow',
+		readOnlyHint: true,
+		idempotentHint: true,
+		openWorldHint: false,
 	},
 	search_docs: {
 		title: 'Search Extenshi documentation',
@@ -567,10 +575,11 @@ const TOOL_ANNOTATIONS: Record<
 }
 
 /**
- * Register the Extenshi tools on a FastMCP server. Idempotent per server.
+ * Register the Extenshi tools once on a FastMCP server.
  * Only the tools whose capability is present in `deps.capabilities` are added.
  */
 export function registerTools(server: FastMCP, deps: ToolDeps): void {
+	const registeredTools: GuideTool[] = []
 	const caps = deps.capabilities
 	const missingKeyMessage = deps.missingKeyMessage ?? MISSING_KEY_MESSAGE
 	// Generic so each tool's Zod `parameters` infers its own `args` type (a
@@ -580,6 +589,7 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 		// the central map; an explicit `tool.annotations` (none today) still wins.
 		const annotations = { ...TOOL_ANNOTATIONS[tool.name], ...tool.annotations }
 		server.addTool(instrument({ ...tool, annotations }))
+		registeredTools.push({ name: tool.name, description: tool.description ?? '', annotations })
 	}
 	// Per-call helpers bound to the injected deps.
 	const bff = (ctx: ToolCallContext): Bff => deps.getBff(ctx)
@@ -1132,6 +1142,18 @@ export function registerTools(server: FastMCP, deps: ToolDeps): void {
 
 	// ── Documentation (free; no API key required) ──────────────────────────────
 	if (caps.has('docs')) {
+		add({
+			name: 'get_development_guide',
+			description:
+				'Start here when developing an extension: get the complete tool inventory for THIS connection, ' +
+				'the Extenshi service directory with access requirements and docs links, GitHub/code placement ' +
+				'guidance, and the ordered workflow from idea and repository through implementation, assets, ' +
+				'privacy, tests/CI, store submission and maintenance. Distinguishes MCP tools from cabinet, ' +
+				'CLI and external steps. Free; no key, account lookup or network request.',
+			parameters: z.object({}),
+			execute: async () => JSON.stringify(buildDevelopmentGuide(registeredTools), null, 2),
+		})
+
 		add({
 			name: 'search_docs',
 			description:

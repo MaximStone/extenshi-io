@@ -10,8 +10,9 @@ backend on your behalf.
 
 ## Get an API key
 
-An API key is **required** — every tool refuses to run without one, and the backend
-enforces it too.
+An API key is required for catalog and own-project tools. Documentation, templates and static
+workflow guides, including `get_development_guide`, work without a key. The backend enforces access
+and project entitlements for authenticated operations.
 
 1. Sign up at **https://auth.extenshi.io/signup**
 2. Create a key at **https://dojo.extenshi.io/api-keys**
@@ -33,6 +34,14 @@ enforces it too.
 }
 ```
 
+## Plan the whole lifecycle
+
+Call `get_development_guide` first for the complete tool inventory on this connection, the Extenshi
+service directory, prerequisites and documentation links, GitHub source/CI guidance, and the ordered
+plan through implementation, testing, store release and maintenance. The inventory is built from
+registered tools. The remote connector shares this guide and directs local artifact operations to
+stdio or CLI. See the [development workflow](https://docs.extenshi.io/developers/development-workflow).
+
 ## Tools
 
 | Tool | What it does | Cost |
@@ -44,6 +53,15 @@ enforces it too.
 | `get_risk_by_store_ids` | Safety scores for **up to 40** extensions in one call, by store id — for auditing a list of installed extensions instead of calling `get_security` per extension | 1 read per call |
 | `market_overview` | Catalog-wide market intelligence with no args (totals, store split, category tree, and the extended breakdown — MV2/MV3, sensitive permissions, risk tiers, trader status, recency, reviews); pass a `query` to scope facets to a search | 1 read |
 | `get_credit_balance` | Remaining credits across every pool (read / scan / icon / inventory), so an agent can size a batch before running it instead of hitting a mid-batch limit | Free |
+| `get_development_guide` | Complete tool inventory for this connection, service directory, GitHub guidance and the ordered development-to-maintenance plan | Free (no key) |
+| `list_extension_templates` | Extension shapes, minimum permissions and browser-specific manifest requirements | Free (no key) |
+| `list_my_projects` | Your projects, repository bindings and claimed listings | Free; identity required |
+| `get_project_state` | Manifest, selected types, saved-state index, hosted URLs and exact integration file | Free; identity required |
+| `get_project_scaffold` | Starter files for one project and target browser | Free; identity required |
+| `list_privacy_policy_versions` | Hosted policy version history | Pro project; no read credit |
+| `get_privacy_policy_version` | One hosted policy's markdown and HTML | Pro project; no read credit |
+| `update_privacy_policy_with_ai` | Propose a policy update for the author to review | Pro project; daily update limit applies |
+| `publish_privacy_policy` | Publish a policy at the project's hosted URL | Pro project; changes the live page |
 | `search_docs` | Search the Extenshi docs + `@extenshi/cli` reference so the assistant can quote exact commands | Free (no key) |
 | `generate_icon_workflow` | Icon design requirements + the local agent-draws-SVG → `npx @extenshi/cli@latest icon preview` → export workflow | Free (no key) |
 | `generate_welcome_page_workflow` | Design brief for the post-install welcome page: the one action it must drive, which illustrations to produce, where to place click markers, and the block JSON to return | Free (no key) |

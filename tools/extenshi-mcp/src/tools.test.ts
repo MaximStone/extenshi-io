@@ -104,6 +104,7 @@ const READ_TOOLS = [
 	'update_privacy_policy_with_ai',
 ]
 const DOCS_TOOLS = [
+	'get_development_guide',
 	'search_docs',
 	'list_extension_templates',
 	'generate_icon_workflow',
@@ -112,14 +113,14 @@ const DOCS_TOOLS = [
 const LOCAL_ONLY_TOOLS = ['scan_extension', 'publish_extension']
 
 describe('registerTools capability gating', () => {
-	it('stdio (all capabilities) registers all 20 tools', () => {
+	it('stdio (all capabilities) registers all 21 tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS, ...LOCAL_ONLY_TOOLS].sort())
-		expect(names).toHaveLength(20)
+		expect(names).toHaveLength(21)
 	})
 
-	it('remote (read + docs only) registers the 18 research tools and NO local-only tools', () => {
+	it('remote (read + docs only) registers the 19 hosted tools and NO local-only tools', () => {
 		const { names, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs']))
 		expect(names.sort()).toEqual([...READ_TOOLS, ...DOCS_TOOLS].sort())
@@ -469,7 +470,7 @@ describe('directory tool annotations', () => {
 	it('every registered tool declares a title and a readOnlyHint', () => {
 		const { tools, server } = recordingServer()
 		registerTools(server, depsFor(['read', 'docs', 'scan', 'publish']))
-		expect(tools).toHaveLength(20)
+		expect(tools).toHaveLength(21)
 		for (const t of tools) {
 			expect(t.annotations?.title, `${t.name} title`).toBeTruthy()
 			expect(typeof t.annotations?.readOnlyHint, `${t.name} readOnlyHint`).toBe('boolean')
@@ -481,7 +482,7 @@ describe('directory tool annotations', () => {
 	// Pinned per-tool because adding a NEW entry to the annotation map is exactly
 	// how the previous two hints got silently re-attributed away from
 	// generate_icon_workflow — a `title` + `readOnlyHint` check did not notice.
-	it.each(['generate_icon_workflow', 'generate_welcome_page_workflow'])(
+	it.each(['get_development_guide', 'generate_icon_workflow', 'generate_welcome_page_workflow'])(
 		'%s declares the full static-guide annotation set',
 		(name) => {
 			const { tools, server } = recordingServer()
