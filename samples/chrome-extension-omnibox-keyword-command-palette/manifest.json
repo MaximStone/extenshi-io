@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Jump — address bar shortcuts",
+  "short_name": "Jump",
+  "version": "1.0",
+  "description": "Type go in the address bar to jump straight to your own shortcuts.",
+  "omnibox": { "keyword": "go" },
+  "permissions": ["storage"],
+  "background": { "service_worker": "service-worker.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": true }
+}
