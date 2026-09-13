@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Marker",
+  "short_name": "Marker",
+  "version": "1.0",
+  "description": "Type mk in the address bar to highlight, count or clear words on the current page.",
+  "omnibox": { "keyword": "mk" },
+  "permissions": ["activeTab", "scripting"],
+  "action": {},
+  "background": { "service_worker": "service-worker.js" }
+}
