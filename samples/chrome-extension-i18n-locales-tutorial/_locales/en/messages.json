@@ -1,0 +1,59 @@
+{
+  "appName": {
+    "message": "Tab Tally",
+    "description": "Extension name. Shown in the store listing and on the toolbar."
+  },
+  "appDesc": {
+    "message": "Counts the tabs and windows you have open, in your own language.",
+    "description": "Store listing description. Keep it under 132 characters."
+  },
+  "actionTitle": {
+    "message": "Tab Tally — count your open tabs",
+    "description": "Tooltip on the toolbar icon."
+  },
+  "popupHeading": {
+    "message": "Right now",
+    "description": "Heading at the top of the popup."
+  },
+  "tabCount_one": {
+    "message": "$count$ tab open",
+    "description": "Singular tab count.",
+    "placeholders": { "count": { "content": "$1", "example": "1" } }
+  },
+  "tabCount_other": {
+    "message": "$count$ tabs open",
+    "description": "Plural tab count.",
+    "placeholders": { "count": { "content": "$1", "example": "17" } }
+  },
+  "windowCount_one": {
+    "message": "in $count$ window",
+    "description": "Window count, follows the tab count in the same sentence.",
+    "placeholders": { "count": { "content": "$1", "example": "1" } }
+  },
+  "windowCount_other": {
+    "message": "in $count$ windows",
+    "description": "Window count, follows the tab count in the same sentence.",
+    "placeholders": { "count": { "content": "$1", "example": "3" } }
+  },
+  "uiLocale": {
+    "message": "Browser language: $locale$",
+    "description": "Diagnostic line at the bottom of the popup.",
+    "placeholders": { "locale": { "content": "$1", "example": "en-US" } }
+  },
+  "optionsButton": {
+    "message": "Settings",
+    "description": "Button in the popup that opens the options page."
+  },
+  "optionsHeading": {
+    "message": "Tab Tally settings",
+    "description": "Heading on the options page."
+  },
+  "optionsCountPinned": {
+    "message": "Count pinned tabs",
+    "description": "Label for the only setting."
+  },
+  "optionsSaved": {
+    "message": "Saved",
+    "description": "Confirmation shown after the setting changes."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "appName": { "message": "Tab Tally" },
+  "appDesc": { "message": "Cuenta las pestañas y ventanas que tienes abiertas, en tu idioma." },
+  "actionTitle": { "message": "Tab Tally — cuenta tus pestañas abiertas" },
+  "popupHeading": { "message": "Ahora mismo" },
+  "tabCount_one": {
+    "message": "$count$ pestaña abierta",
+    "placeholders": { "count": { "content": "$1", "example": "1" } }
+  },
+  "tabCount_other": {
+    "message": "$count$ pestañas abiertas",
+    "placeholders": { "count": { "content": "$1", "example": "17" } }
+  },
+  "windowCount_one": {
+    "message": "en $count$ ventana",
+    "placeholders": { "count": { "content": "$1", "example": "1" } }
+  },
+  "windowCount_other": {
+    "message": "en $count$ ventanas",
+    "placeholders": { "count": { "content": "$1", "example": "3" } }
+  },
+  "uiLocale": {
+    "message": "Idioma del navegador: $locale$",
+    "placeholders": { "locale": { "content": "$1", "example": "es-ES" } }
+  },
+  "optionsButton": { "message": "Ajustes" },
+  "optionsHeading": { "message": "Ajustes de Tab Tally" },
+  "optionsCountPinned": { "message": "Contar pestañas fijadas" },
+  "optionsSaved": { "message": "Guardado" }
+}

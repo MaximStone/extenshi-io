@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  direction: __MSG_@@bidi_dir__;
+  margin: 0;
+  padding: 16px;
+  min-width: 260px;
+}
+
+h1 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding-__MSG_@@bidi_start_edge__: 10px;
+  border-__MSG_@@bidi_start_edge__: 3px solid #fb5b1a;
+}
+
+.muted {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.row span {
+  unicode-bidi: plaintext;
+}
