@@ -55,6 +55,9 @@ stdio or CLI. See the [development workflow](https://docs.extenshi.io/developers
 | `get_credit_balance` | Remaining credits across every pool (read / scan / icon / inventory), so an agent can size a batch before running it instead of hitting a mid-batch limit | Free |
 | `get_development_guide` | Complete tool inventory for this connection, service directory, GitHub guidance and the ordered development-to-maintenance plan | Free (no key) |
 | `list_extension_templates` | Extension shapes, minimum permissions and browser-specific manifest requirements | Free (no key) |
+| `connection_diagnostics` | Authentication, scopes, backend workspace contracts and capabilities | Free; identity required |
+| `import_manifest` | Import manifest JSON into the Dojo editor and project labels; preview changes and apply with a state hash | Requires project.write for OAuth |
+| `record_project_evidence` | Store metadata bound to the exact artifact, input hash, browser and source revision | Requires evidence.write for OAuth |
 | `list_my_projects` | Your projects, repository bindings and claimed listings | Free; identity required |
 | `get_project_state` | Manifest, selected types, saved-state index, hosted URLs and exact integration file | Free; identity required |
 | `get_project_scaffold` | Starter files for one project and target browser | Free; identity required |

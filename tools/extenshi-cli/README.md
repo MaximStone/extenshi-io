@@ -50,14 +50,17 @@ Most of the CLI needs **no account and no network**. Two commands spend credits:
 | Command | Credits | Network |
 | --- | --- | --- |
 | `extenshi icon preview <icon>` | **Free**, no API key | ✅ none — fully offline |
-| `extenshi review-risk <artifact>` | **Free**, no API key | ✅ none, unless you pass `--extension-id` — that reads your last published manifest from the catalog, also free |
-| `extenshi publish <artifact>` | **Free**, no Extenshi key | Uploads go straight from your machine to the store APIs |
-| `extenshi login` | **Free** | ✅ none — writes the key to disk |
+| `extenshi review-risk <artifact>` | **Free**, no API key | Local checks, including `--listing`, stay on your machine. `--extension-id` also reads your last published manifest from the catalog, and that read is free |
+| `extenshi generate-listing <artifact>` | **Free**, no API key | ✅ none — fully offline |
+| `extenshi localize …` | **Free**, no API key | ✅ none — fully offline |
+| `extenshi publish <artifact>` | **Free**, no Extenshi key for the upload | Uploads go straight from your machine to the store APIs. An access check runs first (testing phase) |
+| `extenshi login` | **Free** | Opens extenshi.io in your browser and saves the key locally |
+| `extenshi doctor` / `project` / `release` / `evidence` | **Free** of catalog credits; API key required | Talks to Dojo about your project. See the [project sync guide](https://docs.extenshi.io/developers/project-sync) |
 | `extenshi risk [store-ids…]` | **1 read credit per call**, up to 40 extensions per call | Catalog read |
 | `extenshi scan <artifact>` | **1 scan credit** | Uploads the artifact to the scan backend |
 
-Every account starts with a **one-time free allowance — 10 reads and 3 scans**
-(there is no monthly reset). Beyond it, prepaid credit packs **never expire**.
+Every account starts with a **one-time free allowance — 10 reads and 3 scans**.
+Beyond it, prepaid credit packs stay in the account until you spend them.
 Create a key at [dojo.extenshi.io/api-keys](https://dojo.extenshi.io/api-keys),
 check your balance at [dojo.extenshi.io/billing](https://dojo.extenshi.io/billing),
 and see [docs.extenshi.io/developers/scan-credits](https://docs.extenshi.io/developers/scan-credits)
@@ -74,11 +77,15 @@ for how metering works.
 | Command | What it does |
 | --- | --- |
 | [`scan <artifact>`](#extenshi-scan-artifact) | Pre-publish security scan of a `.crx` / `.xpi` / `.zip`, with an HTML report |
-| [`review-risk <artifact>`](#extenshi-review-risk-artifact) | Predict store review outcomes: REJECTED / ATTRITION / SLOW |
+| [`review-risk <artifact>`](#extenshi-review-risk-artifact) | Predict store review outcomes: REJECTED / ATTRITION / SLOW. Alias: `review` |
+| [`generate-listing <artifact>`](#extenshi-generate-listing-artifact) | Write `CHROMEWEBSTORE.md` from the package |
+| [`localize`](#extenshi-localize) | Prepare, check, and apply `_locales` translations |
 | [`risk [store-ids…]`](#extenshi-risk-store-ids) | Safety scores for extensions that are already published, in bulk, by store id |
 | [`icon preview <icon>`](#extenshi-icon-preview-icon) | Render an icon inside Chrome / Firefox / Edge toolbars, with contrast checks + PNG/ZIP export |
 | [`publish <artifact>`](#extenshi-publish-artifact) | Upload a build to Chrome, Firefox, and/or Edge with your own store credentials |
-| [`login`](#extenshi-login) | Save your API key to `~/.extenshi/config.json` |
+| [`project`](#extenshi-project-release-and-evidence) / [`release`](#extenshi-project-release-and-evidence) / [`evidence`](#extenshi-project-release-and-evidence) / [`doctor`](#extenshi-project-release-and-evidence) | Sync project metadata and release evidence with Dojo |
+| [`login`](#extenshi-login) | Sign in through the browser and save the API key to `~/.extenshi/config.json` |
+| [`telemetry`](#environment-variables) | Show or set anonymous usage reporting: `on`, `off`, `status` |
 
 `npx @extenshi/cli@latest --help` and `… <command> --help` print the same
 information from the version you're actually running.
@@ -88,7 +95,7 @@ information from the version you're actually running.
 ## `extenshi scan <artifact>`
 
 Scans a packaged extension and reports security findings. By default it writes a
-branded, filterable **HTML report** and opens it in your browser; live
+self-contained, filterable **HTML report** and opens it in your browser; live
 per-scanner progress streams to the terminal while it runs. A store-review
 prediction (the same checks as `review-risk`) is folded into the report unless
 you opt out.
@@ -170,7 +177,52 @@ npx @extenshi/cli@latest review-risk ./dist/my-extension.zip
 | `--extension-id <id>` | Numeric catalog ID — enables the auto-disable diff against your **last published** manifest (Ownership tab in dojo). |
 | `--store <chrome\|firefox\|edge>` | Store to diff the manifest against (default: `chrome`). Permission sets differ per store. |
 | `--catalog-url <url>` | Override the catalog API base URL (default: `https://bff.extenshi.io`). |
+| `--listing <file>` | JSON file with your store listing text (`name`, `shortDescription`, `description`). The package already has the localized name and short description; this adds the full description, which lives only in the developer dashboard. |
 | `--json` | Output raw JSON findings. |
+
+---
+
+## `extenshi generate-listing <artifact>`
+
+Writes `CHROMEWEBSTORE.md` from a packaged (`.zip` / `.crx` / `.xpi`) or unpacked
+extension: listing copy, permission justifications, single purpose, and
+privacy-practices questions. It assembles those checklists locally and does not
+write anything into the Chrome Web Store. The file is the same draft
+`review-risk --listing` accepts.
+
+```bash
+npx @extenshi/cli@latest generate-listing ./dist/my-extension.zip
+npx @extenshi/cli@latest review-risk ./dist/my-extension.zip --listing CHROMEWEBSTORE.md
+```
+
+| Option | Description |
+| --- | --- |
+| `--output <path>` | Where to write the markdown (default: `CHROMEWEBSTORE.md` in the current directory). |
+| `--listing <file>` | JSON file with your listing text, so the generated markdown can include the full description. |
+
+---
+
+## `extenshi localize`
+
+Prepares, checks, and applies extension message translations on your machine.
+English source stays the fallback; HTML and JS are not rewritten by `init`.
+
+```bash
+npx @extenshi/cli@latest localize init ./extension --output ./extension-localized
+npx @extenshi/cli@latest localize prepare ./extension --lang fr,de,es --output ./localization --protect MyBrand
+npx @extenshi/cli@latest localize apply ./extension --translations ./localization/translations.json --protect MyBrand
+npx @extenshi/cli@latest localize check ./extension --protect MyBrand
+```
+
+| Command | What it does |
+| --- | --- |
+| `init <directory> --output <directory>` | Copy an English extension and localize literal manifest fields. The output directory must sit outside the source. |
+| `prepare <directory> --output <directory>` | Write `localization-request.json`. `--lang` overrides the locales in `localization.json`. `--protect` keeps terms verbatim. |
+| `apply <directory> --translations <file>` | Apply a reviewed translation file. `--protect` keeps the same terms verbatim. |
+| `check <directory>` | Validate the locales. Exits non-zero when it finds errors. `--protect` is optional. |
+
+The hand-off contract and the review gates are in
+[Localization](https://docs.extenshi.io/developers/localization).
 
 ---
 
@@ -290,24 +342,59 @@ npx @extenshi/cli@latest scan ./dist/my-extension.zip && \
 
 ---
 
-## `extenshi login`
+## `extenshi project`, `release`, and `evidence`
 
-Saves your API key to `~/.extenshi/config.json`, where `scan`, `risk`, and the
-[MCP server](../extenshi-mcp/) all read it from. Purely local — nothing is sent
-anywhere. The file persists between `npx` runs, so you only do this once.
+These commands keep Dojo's copy of project metadata next to the git checkout.
+Git stays the source of the code. The CLI sends metadata: manifest observations,
+release records, and evidence digests. Source stays in git, and store credentials
+stay on your machine.
 
 ```bash
-npx @extenshi/cli@latest login                      # interactive prompt
+npx @extenshi/cli@latest doctor --json
+npx @extenshi/cli@latest project bind --project <project-id> --repo owner/extension --branch main
+npx @extenshi/cli@latest project import-manifest src/manifest.json --browser chrome
+npx @extenshi/cli@latest project diff
+npx @extenshi/cli@latest release prepare deploy.zip --browser chrome --locales en --source-manifest src/manifest.json --listing store/listing.json --policy privacy.md --payment not-used --dry-run
+npx @extenshi/cli@latest evidence push reports/scan-metadata.json --artifact deploy.zip
+npx @extenshi/cli@latest release status --browser chrome --json
+```
+
+`doctor` reports whether this account can see project-workspace v1.
+`project import-manifest --dry-run` previews the editor change.
+`project sync` applies a reviewed metadata patch and replays anything that was
+queued while the backend was unreachable. `release prepare` records the package.
+Uploading that package to a store is still `publish`. `evidence push` accepts a
+report whose artifact hash matches the file you pass.
+
+Full workflow, conflict handling, and the evidence JSON shape:
+[Synchronize an existing extension project](https://docs.extenshi.io/developers/project-sync).
+
+---
+
+## `extenshi login`
+
+Opens extenshi.io in your browser so you can sign in or create an account, then
+saves the API key to `~/.extenshi/config.json`. `scan`, `risk`, Guard, and the
+[MCP server](../extenshi-mcp/) read that same file. You do this once per machine.
+
+```bash
+npx @extenshi/cli@latest login                      # browser sign-in, pairing code in the terminal
+npx @extenshi/cli@latest login --paste              # paste a key when no browser can open
 npx @extenshi/cli@latest login --api-key ek_…       # non-interactive
 ```
 
 | Option | Description |
 | --- | --- |
-| `--api-key <key>` | API key (skips the interactive prompt). |
+| `--paste` | Skip the browser and paste an API key. |
+| `--api-key <key>` | API key (skips the browser entirely). |
 | `--api-url <url>` | Override the scan API base URL. |
 
-The key can also come from `EXTENSHI_API_KEY` in the environment or a local
-`.env` — checked in that order, so CI never needs the config file.
+In CI set `EXTENSHI_API_KEY` from your secrets. A non-interactive terminal
+cannot wait on a browser approval. The key can also come from a local `.env`.
+
+If the login expires or you decline it in the browser, run `login` again. At the
+API-key limit, revoke one at [dojo.extenshi.io/api-keys](https://dojo.extenshi.io/api-keys)
+and retry.
 
 ---
 
@@ -323,7 +410,9 @@ The key can also come from `EXTENSHI_API_KEY` in the environment or a local
 
 **Telemetry:** the CLI records which command ran, whether it succeeded, and a
 coarse error kind. No artifact contents, file names, findings, or API keys.
-Honors `DO_NOT_TRACK`; opt out entirely with `EXTENSHI_TELEMETRY=0`.
+Honors `DO_NOT_TRACK`; opt out entirely with `EXTENSHI_TELEMETRY=0`. The same
+choice is `npx @extenshi/cli@latest telemetry on|off|status`. `status` names an
+environment override when one is set.
 
 ---
 

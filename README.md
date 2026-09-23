@@ -1,7 +1,7 @@
 # extenshi.io
 
 > **The browser-extension intelligence platform.** A cross-store catalog of
-> **343,000+ extensions** (Chrome, Firefox, Edge) with security analysis, plus
+> **373,000+ extensions** (Chrome, Firefox, Edge) with security analysis, plus
 > developer tooling for analytics, pre-publish scanning, and multi-store
 > publishing.
 
@@ -23,37 +23,45 @@ analysis, pre-publish security scanning, and one-command multi-store publishing.
 
 | | |
 |---|---|
-| 🔎 **Catalog** | <https://catalog.extenshi.io> — search 343k+ extensions, filter by store / category / pricing / risk / permissions |
+| 🔎 **Catalog** | <https://catalog.extenshi.io> — search 373k+ extensions, filter by store / category / pricing / risk / permissions |
 | 📚 **Docs** | <https://docs.extenshi.io> — product guides + full CLI reference |
 | ✍️ **Blog** | <https://blog.extenshi.io> — deep dives on extension security & the ecosystem |
 | 🟢 **Status** | <https://status.extenshi.io> — live uptime for every public service |
-| 🛠️ **For developers** | <https://extenshi.io/developers> — analytics, publishing, ExtenshiPay |
+| 🛠️ **For developers** | <https://developers.extenshi.io> — analytics, publishing, payments |
+| ⌨️ **CLI** | <https://cli.extenshi.io> — scan, review prediction, icons, publishing |
+| 🤖 **MCP** | <https://ai.extenshi.io> — the catalog and pre-publish scanning inside a coding agent |
+| 🧹 **Guard** | <https://guard.extenshi.io> — see and clean up the extensions installed on your machine |
+| 🖥️ **Desktop** | <https://desktop.extenshi.io> — manage extensions across Chrome, Firefox, and Edge |
 | 🔑 **Dojo (your account)** | <https://dojo.extenshi.io> — API keys, billing, publishing tools |
 
 ---
 
 ## Open developer tools (free on npm)
 
-We ship two tools to the public npm registry. They talk to the public Extenshi
+We ship three tools to the public npm registry. They talk to the public Extenshi
 backend with your own API key — there's nothing to host.
 
 | Tool | Install | What it does |
 |---|---|---|
-| **`@extenshi/cli`** | `npx @extenshi/cli@latest` | **Security scanner**, **store-review predictor**, **icon toolbar preview**, **bulk safety lookup** for extensions you already have, and **multi-store publisher** for `.zip` / `.crx` / `.xpi` artifacts. Runs in CI. |
-| **`@extenshi/mcp`** | `npx @extenshi/mcp@latest` | **MCP server** that brings the catalog + scanning into Claude, Cursor, and other AI tools. |
+| **`@extenshi/cli`** | `npx @extenshi/cli@latest` | **Security scanner**, **store-review predictor**, **store-listing draft**, **icon toolbar preview**, **message localization**, **Dojo project sync**, **bulk safety lookup**, and **multi-store publisher** for `.zip` / `.crx` / `.xpi` artifacts. Runs in CI. |
+| **`@extenshi/mcp`** | `npx @extenshi/mcp@latest` | **MCP server** that brings the catalog, your projects, and pre-publish scanning into Claude, Cursor, and other AI tools. |
+| **`@extenshi/guard`** | `npx @extenshi/guard@latest` | **Lists every extension installed** on this machine, then checks that list against the catalog and walks you through removing or disabling the ones you choose. |
 
-→ [**Full CLI command reference**](./tools/extenshi-cli/) — every command and flag
+→ [**Full CLI command reference**](./tools/extenshi-cli/) — commands and flags
+→ [**Guard**](./tools/extenshi-guard/) — what is installed on this machine
 → [**Example output**](./examples/) — see the HTML report and the icon preview before installing anything
 → [**Agent skills**](./skills/) — free `SKILL.md` files your coding agent can pick up
 → [**Sample extensions**](./samples/) — complete, loadable extension code from our blog tutorials
-→ [**tools/**](./tools/) — setup for both npm packages
+→ [**tools/**](./tools/) — setup for the npm packages
 
 Most of the CLI is **free and offline** — only `scan` and `risk` spend credits:
 
 ```bash
 npx @extenshi/cli@latest icon preview ./icon.svg --name "My Extension"   # free, offline
 npx @extenshi/cli@latest review-risk ./dist/my-extension.zip             # free, offline
+npx @extenshi/cli@latest generate-listing ./dist/my-extension.zip        # free, offline
 npx @extenshi/cli@latest publish ./dist/my-extension.zip                 # free, your own store creds
+npx @extenshi/guard@latest list                                          # free, offline
 npx @extenshi/cli@latest scan ./dist/my-extension.zip                    # 1 scan credit
 npx @extenshi/cli@latest risk --file ./installed.txt                     # 1 read credit per 40 ids
 ```
@@ -89,7 +97,10 @@ Everything in this list works without signing up. Bookmark what's useful.
 |---|---|
 | `npx @extenshi/cli@latest icon preview <icon>` | Your icon at 16 px in real Chrome / Firefox / Edge toolbars, contrast + canvas checks, PNG & ZIP export. Fully offline. [See the output →](./examples/) |
 | `npx @extenshi/cli@latest review-risk <artifact>` | Predicts the store review: what gets **rejected**, what causes **user attrition** on update, what triggers a **slow** manual review. Fully offline. |
+| `npx @extenshi/cli@latest generate-listing <artifact>` | Writes `CHROMEWEBSTORE.md` (listing copy, permission justifications, privacy questions) from the package. Fully offline. |
+| `npx @extenshi/cli@latest localize` | Prepares, checks, and applies `_locales` message translations on your machine. Fully offline. |
 | `npx @extenshi/cli@latest publish <artifact>` | Publishes to Chrome / Firefox / Edge with *your own* store credentials — uploads go straight from your machine to the stores. |
+| `npx @extenshi/guard@latest list` | Every extension installed in Chrome, Firefox, Edge, and the other browsers on this machine. Fully offline. |
 
 **For your coding agent:**
 
@@ -103,11 +114,14 @@ Everything in this list works without signing up. Bookmark what's useful.
 
 | | |
 |---|---|
-| [Extension safety check](https://extenshi.io/check) | Paste a store URL, see what an extension can access before you install it |
-| [Manifest generator](https://extenshi.io/manifest-generator) | Build a valid MV3 `manifest.json` |
-| [Icon generator & toolbar preview](https://extenshi.io/icon-generator) | The same preview as the CLI, in the browser |
-| [Privacy-policy generator](https://extenshi.io/policy-generator) | A store-acceptable privacy policy for your extension |
-| [Catalog search](https://catalog.extenshi.io) | 343k+ extensions across three stores, with risk ratings |
+| [Extension safety check](https://catalog.extenshi.io/check) | Paste a store URL, see what an extension can access before you install it |
+| [Manifest generator](https://manifest.extenshi.io) | Build a valid MV3 `manifest.json` |
+| [Icon generator & toolbar preview](https://icons.extenshi.io) | The same preview as the CLI, in the browser |
+| [Privacy-policy generator](https://policy.extenshi.io) | A store-acceptable privacy policy for your extension |
+| [Pin guide](https://pin.extenshi.io) | An illustrated “find it and pin it” page, with your own icon, that you can host anywhere |
+| [Uninstall survey](https://uninstall.extenshi.io) | A hosted survey for `setUninstallURL`: churn reasons, by version |
+| [Pricing](https://pricing.extenshi.io) | The one-time free allowance, and prepaid packs for reads, scans, icons, and Guard |
+| [Catalog search](https://catalog.extenshi.io) | 373k+ extensions across three stores, with risk ratings |
 | [Methodology](https://docs.extenshi.io/methodology) | How the scanning and risk scoring actually work — and their limits |
 
 **Open data:** the [research reports](#-public-research) below are CC BY 4.0.
@@ -135,15 +149,17 @@ Whether it's in **our** platform or in an **extension** we list, see
 
 ## Links
 
-**In this repo:** [CLI reference](./tools/extenshi-cli/) · [example output](./examples/) · [agent skills](./skills/) · [sample extensions](./samples/) · [tools setup](./tools/) · [research reports](./reports/) · [security policy](./SECURITY.md)
+**In this repo:** [CLI reference](./tools/extenshi-cli/) · [Guard](./tools/extenshi-guard/) · [example output](./examples/) · [agent skills](./skills/) · [sample extensions](./samples/) · [tools setup](./tools/) · [research reports](./reports/) · [security policy](./SECURITY.md)
 
 - Website — <https://extenshi.io>
 - Catalog — <https://catalog.extenshi.io>
+- Developers — <https://developers.extenshi.io>
 - Docs — <https://docs.extenshi.io>
 - Blog — <https://blog.extenshi.io>
 - Status — <https://status.extenshi.io>
 - `@extenshi/cli` — <https://www.npmjs.com/package/@extenshi/cli>
 - `@extenshi/mcp` — <https://www.npmjs.com/package/@extenshi/mcp>
+- `@extenshi/guard` — <https://www.npmjs.com/package/@extenshi/guard>
 
 ## License
 

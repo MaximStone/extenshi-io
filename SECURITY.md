@@ -41,8 +41,8 @@ the extension authors — see the risk disclaimer at
 
 ## Scope
 
-In scope: `*.extenshi.io` web properties and APIs, and the `@extenshi/cli` and
-`@extenshi/mcp` npm packages.
+In scope: `*.extenshi.io` web properties and APIs, and the `@extenshi/cli`,
+`@extenshi/mcp`, and `@extenshi/guard` npm packages.
 
 Out of scope: findings that require a compromised end-user device, social
 engineering of our staff, volumetric DoS, and reports about third-party
