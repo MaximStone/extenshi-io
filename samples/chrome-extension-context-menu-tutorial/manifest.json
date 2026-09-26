@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Clip Jar",
+  "description": "Save text selections and links from any page with a right-click, then copy them back later.",
+  "version": "1.0.0",
+  "permissions": [
+    "contextMenus",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Open the Clip Jar"
+  }
+}
